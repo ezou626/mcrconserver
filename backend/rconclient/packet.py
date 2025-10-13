@@ -205,4 +205,13 @@ def reconnect() -> None:
 
 
 def send_command(command: str) -> str:
+    """
+    Sends a command packet to the RCON server and returns the response body as a string.
+
+    Args:
+        command: The command to send to the RCON server.
+
+    Returns:
+        The body of the response packet as a string.
+    """
     return _send_packet(command, RCONPacketType.COMMAND_PACKET)
