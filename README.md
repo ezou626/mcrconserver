@@ -15,9 +15,28 @@ Allows for easy administration of a Minecraft server over network
 
 ### Tech Stack
 
-- Python (FastAPI) backend with SQLite for storage
-- Vite for React frontend styled with Tailwind CSS and ShadCN
+#### Backend (backend/)
+
+- Python
+- Asyncio
+- FastAPI
+- SQLite
+- uv
+- ruff
+
+#### Frontend (frontend/)
+
+- TypeScript
+- JavaScript
+- React
+- Tailwind CSS
+- ShadCN
+- Radix
+- Lucide
+- Prettier
+- ESLint
+- Vite
 
 ### Architecture Diagram
 
-- TODO
+- TODO: Need to add this from Excalidraw
