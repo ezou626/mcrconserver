@@ -24,6 +24,8 @@ Allows for easy administration of a Minecraft server over network
 - uv
 - ruff
 
+The RCON client is heavily inspired by [this async RCON client](https://github.com/Iapetus-11/aio-mc-rcon) by [Iapetus-11](https://github.com/Iapetus-11).
+
 #### Frontend (frontend/)
 
 - TypeScript
