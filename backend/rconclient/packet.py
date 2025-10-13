@@ -3,7 +3,7 @@ Dead-simple RCON packet creation, parsing, and socket management.
 
 Single-threaded, single-coroutine access only.
 
-Lifecycle: connect() -> send_packet()
+Lifecycle: connect() -> _send_packet()
 
 Disconnect is implicit when the program exits.
 """
@@ -35,7 +35,7 @@ authenticated = False
 request_id = 1
 
 
-def send_packet(payload: str, packet_type: RCONPacketType) -> str:
+def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
     """
     Synchronously sends a packet to the RCON server and returns the response body as a string.
 
@@ -150,7 +150,7 @@ def connect(
                 "RCON_PASSWORD environment variable is not set"
             )
 
-    send_packet(password, RCONPacketType.AUTH_PACKET)
+    _send_packet(password, RCONPacketType.AUTH_PACKET)
     global authenticated
     authenticated = True
     LOG.debug("RCON client authenticated")
@@ -204,51 +204,5 @@ def reconnect() -> None:
     request_id = 1
 
 
-def send_packet_with_retry(
-    payload: str, packet_type: RCONPacketType, max_retries: int = 3
-) -> str:
-    """
-    Send a packet with automatic retry on timeout.
-
-    This function will attempt to reconnect and retry sending the packet if a timeout occurs.
-
-    Args:
-        payload: The body of the packet to send.
-        packet_type: The type of the packet to send (RCONPacketType).
-        max_retries: Maximum number of retry attempts (default: 3).
-
-    Returns:
-        The body of the response packet as a string.
-
-    Raises:
-        RCONClientTimeout: if all retry attempts fail.
-        RCONClientNotConnected: if the client is not connected.
-        RCONClientNotAuthenticated: if the client is not authenticated.
-        RCONClientAuthenticationFailed: if authentication fails.
-    """
-    retry_count = 0
-    last_exception = None
-
-    while retry_count <= max_retries:
-        try:
-            return send_packet(payload, packet_type)
-        except RCONClientTimeout as e:
-            last_exception = e
-            retry_count += 1
-
-            if retry_count <= max_retries:
-                LOG.warning(
-                    f"Timeout occurred, retrying ({retry_count}/{max_retries})..."
-                )
-                try:
-                    reconnect()
-                except Exception as reconnect_error:
-                    LOG.error(f"Failed to reconnect: {str(reconnect_error)}")
-                    # Continue to next retry even if reconnect fails
-            else:
-                break
-
-    # If we reached here, all retries failed
-    raise last_exception or RCONClientTimeout(
-        f"Failed after {max_retries} retry attempts"
-    )
+def send_command(command: str) -> str:
+    return _send_packet(command, RCONPacketType.COMMAND_PACKET)
