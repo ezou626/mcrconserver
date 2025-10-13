@@ -11,7 +11,13 @@ Allows for easy administration of a Minecraft server over network
 - API for integrations (Discord bot, for example)
 - Fast setup
 
-## Tech Stack
+## Implementation Details
+
+### Tech Stack
 
 - Python (FastAPI) backend with SQLite for storage
 - Vite for React frontend styled with Tailwind CSS and ShadCN
+
+### Architecture Diagram
+
+- TODO
