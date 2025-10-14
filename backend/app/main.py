@@ -3,7 +3,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +17,6 @@ from .rconclient import get_queue_size, queue_command, worker
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 LOG.info("API is starting up")
-LOG.info(uvicorn.Config.asgi_version)
 
 load_dotenv()
 initialize_user_table()

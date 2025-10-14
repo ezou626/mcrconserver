@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -15,16 +14,6 @@ LOG.setLevel(logging.DEBUG)
 LOG.info("Auth router is being imported")
 
 router = APIRouter()
-
-
-def is_token_expired(unix_timestamp: int) -> bool:
-    if unix_timestamp:
-        datetime_from_unix = datetime.fromtimestamp(unix_timestamp)
-        current_time = datetime.now()
-        difference_in_minutes = (datetime_from_unix - current_time).total_seconds() / 60
-        return difference_in_minutes <= 0
-
-    return True
 
 
 def validate_session(request: Request) -> dict:

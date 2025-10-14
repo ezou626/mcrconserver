@@ -1,27 +1,16 @@
+from datetime import datetime
 import logging
-from sqlite3 import connect
 import getpass
-import secrets
 
 from bcrypt import checkpw, gensalt, hashpw
+
+from .db_connection import get_db_connection
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 LOG.info("Auth helpers are being imported")
 
 SPECIAL_CHARACTERS = "!@#$%^&*()-_=+[{]}"
-
-DB_PATH = "database.db"
-LOG.info("Using database at: %s", DB_PATH)
-db = None
-
-
-def get_db_connection():
-    global db
-    if db is not None:
-        return db
-    db = connect(DB_PATH, check_same_thread=False)
-    return db
 
 
 def initialize_user_table():
@@ -125,65 +114,14 @@ def check_password(username: str, password: str) -> str | None:
     return None
 
 
-def generate_api_key(username: str) -> str | None:
-    """
-    Generate a secure API key for the given username.
-    """
+def is_token_expired(unix_timestamp: int) -> bool:
+    if unix_timestamp:
+        datetime_from_unix = datetime.fromtimestamp(unix_timestamp)
+        current_time = datetime.now()
+        difference_in_minutes = (datetime_from_unix - current_time).total_seconds() / 60
+        return difference_in_minutes <= 0
 
-    api_key = secrets.token_urlsafe(64)
-
-    try:
-        db = get_db_connection()
-        db.execute(
-            "INSERT INTO api_keys (api_key, username) VALUES (?, ?)",
-            (api_key, username),
-        )
-        db.commit()
-    except Exception as e:
-        print(f"Error generating API key: {e}")
-        return None
-
-    return api_key
-
-
-def revoke_api_key(username: str, api_key: str) -> bool:
-    """
-    Revoke the given API key.
-    """
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute(
-        "DELETE FROM api_keys WHERE api_key = ? AND username = ?", (api_key, username)
-    )
-    db.commit()
-    return cursor.rowcount > 0
-
-
-def validate_api_key(username: str, api_key: str) -> bool:
-    """
-    Validate the given API key.
-    """
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute(
-        "SELECT COUNT(*) FROM api_keys WHERE api_key = ? AND username = ?",
-        (api_key, username),
-    )
-    row = cursor.fetchone()
-    return row is not None and row[0] > 0
-
-
-def list_api_keys(username: str) -> list[tuple[str, str]]:
-    """
-    List all API keys for the given username.
-    """
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute(
-        "SELECT api_key, created_at FROM api_keys WHERE username = ?", (username,)
-    )
-    rows = cursor.fetchall()
-    return [(row[0], row[1]) for row in rows]
+    return True
 
 
 def create_account(username: str, password: str, role: str) -> bool:
