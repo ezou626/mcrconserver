@@ -8,6 +8,13 @@ from .account_helpers import (
     create_account,
     delete_account,
 )
+from .key_helpers import (
+    generate_api_key,
+    list_api_keys,
+    list_all_api_keys,
+    revoke_api_key,
+    validate_api_key,
+)
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -137,3 +144,52 @@ def change_password_route(
             detail=result,
         )
     return {"success": True, "message": "Password changed successfully"}
+
+
+@router.put("/api-key")
+def create_api_key_route(user=Depends(check_if_role_is(["owner", "admin"]))):
+    api_key = generate_api_key(user["username"])
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to create API key",
+        )
+    return {"success": True, "api_key": api_key}
+
+
+@router.get("/api-key")
+def list_api_keys_route(user=Depends(check_if_role_is(["owner", "admin"]))):
+    api_keys = list_api_keys(user["username"])
+    return {"success": True, "api_keys": api_keys}
+
+
+@router.get("/api-key/all")
+def list_all_api_keys_route(user=Depends(check_if_role_is(["owner"]))):
+    api_keys = list_all_api_keys()
+    return {"success": True, "api_keys": api_keys}
+
+
+@router.delete("/api-key")
+def revoke_api_key_route(
+    api_key: Annotated[str, Form(...)],
+    user=Depends(check_if_role_is(["owner", "admin"])),
+):
+    if not revoke_api_key(user["username"], api_key):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to revoke API key",
+        )
+    return {"success": True, "message": "API key revoked successfully"}
+
+
+@router.post("/api-key/validate")
+def validate_api_key_route(
+    api_key: Annotated[str, Form(...)],
+    user=Depends(check_if_role_is(["owner", "admin"])),
+):
+    if not validate_api_key(user["username"], api_key):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid API key",
+        )
+    return {"success": True, "message": "API key is valid"}
