@@ -5,6 +5,7 @@ Since all modules are singletons, we get a natural shared client across the app.
 """
 
 import logging
+
 from .worker import queue
 
 LOG = logging.getLogger(__name__)

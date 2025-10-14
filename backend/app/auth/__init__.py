@@ -1,10 +1,9 @@
 from .helpers import (
     check_password,
+    get_db_connection,
     initialize_session_table,
     initialize_user_table,
-    get_db_connection,
 )
-
 from .router import router
 
 __all__ = [

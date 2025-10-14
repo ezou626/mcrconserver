@@ -8,4 +8,5 @@ dependencies = [
     "bcrypt>=5.0.0",
     "fastapi[standard]>=0.119.0",
     "ruff>=0.14.0",
+    "starlette[full]>=0.48.0",
 ]

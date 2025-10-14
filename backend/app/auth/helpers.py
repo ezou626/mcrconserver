@@ -1,6 +1,7 @@
-from bcrypt import checkpw, gensalt, hashpw
-from sqlite3 import Connection, connect
 import logging
+from sqlite3 import Connection, connect
+
+from bcrypt import checkpw, gensalt, hashpw
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)

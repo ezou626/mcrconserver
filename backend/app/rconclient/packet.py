@@ -8,18 +8,19 @@ Lifecycle: connect() -> _send_packet()
 Disconnect is implicit when the program exits.
 """
 
+import logging
 import os
 import socket
-import logging
 import struct
-from .types import RCONPacketType
+
 from .errors import (
-    RCONClientMissingPassword,
-    RCONClientNotConnected,
     RCONClientAuthenticationFailed,
+    RCONClientMissingPassword,
     RCONClientNotAuthenticated,
+    RCONClientNotConnected,
     RCONClientTimeout,
 )
+from .types import RCONPacketType
 
 logging.basicConfig(level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
