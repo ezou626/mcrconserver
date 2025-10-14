@@ -1,12 +1,12 @@
 import logging
-import secrets
 from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request, status
-from fastapi.responses import Response
 
-from .helpers import check_password, get_db_connection
+from .helpers import (
+    check_password,
+)
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -25,47 +25,37 @@ def is_token_expired(unix_timestamp: int) -> bool:
     return True
 
 
-def validate_session(request: Request) -> bool:
-    session_authorization = request.cookies.get("Authorization")
-    session_id = request.session.get("session_id")
-    session_access_token = request.session.get("access_token")
-    token_exp = request.session.get("token_expiry")
+def validate_session(request: Request) -> dict:
+    session = request.session
 
-    if not session_authorization and not session_access_token:
-        logging.info(
-            "No Authorization and access_token in session, redirecting to login"
-        )
-        return False
+    # Ensure session exists and has a username
+    username = session.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
-    if session_authorization != session_id:
-        logging.info("Authorization does not match Session Id, redirecting to login")
-        return False
-
-    if is_token_expired(token_exp):
-        logging.info("Access_token is expired, redirecting to login")
-        return False
-
-    logging.info("Valid Session, Access granted.")
-    return True
+    return {"username": username}
 
 
 @router.post("/login")
 def login(
     request: Request,
-    response: Response,
     username: Annotated[str, Form(...)],
     password: Annotated[str, Form(...)],
-    user=Depends(validate_session),
 ):
-    db = get_db_connection()
+    if validate_session(request):
+        return {"success": True, "message": "Already logged in"}
 
-    if not check_password(db, username, password):
+    if not check_password(username, password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
-    request.session.update({"username": username})
-
-    response.set_cookie(key="Authorization", value=session_id)
+    request.session["username"] = username
     return {"success": True, "message": "Login successful"}
+
+
+@router.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"success": True, "message": "Logout successful"}

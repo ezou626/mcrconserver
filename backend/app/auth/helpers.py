@@ -1,5 +1,6 @@
 import logging
-from sqlite3 import Connection, connect
+from sqlite3 import connect
+import getpass
 
 from bcrypt import checkpw, gensalt, hashpw
 
@@ -22,7 +23,9 @@ def get_db_connection():
     return db
 
 
-def initialize_user_table(db: Connection):
+def initialize_user_table():
+    db = get_db_connection()
+
     # check if users table exists, if not create it
     db.execute(
         """
@@ -44,11 +47,11 @@ def initialize_user_table(db: Connection):
     username = input("Please enter the admin username: ")
     admin_password = None
     while not admin_password:
-        admin_password = input("Please enter the admin password: ")
+        admin_password = getpass.getpass("Please enter the admin password: ")
         if not is_password_valid(admin_password):
             admin_password = None
             continue
-    admin_password_confirm = input("Please re-enter the admin password: ")
+    admin_password_confirm = getpass.getpass("Please re-enter the admin password: ")
     if admin_password != admin_password_confirm:
         return None
     salt = gensalt()
@@ -60,22 +63,10 @@ def initialize_user_table(db: Connection):
     db.commit()
 
 
-def initialize_session_table(db: Connection):
-    # check if sessions table exists, if it does drop it and recreate it
-    db.execute("DROP TABLE IF EXISTS sessions;")
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sessions (
-            api_key TEXT PRIMARY KEY,
-            username TEXT NOT NULL,
-            FOREIGN KEY (username) REFERENCES users (username) ON DELETE CASCADE
-        );
-        """
-    )
-    db.commit()
-
-
 def is_password_valid(admin_password: str) -> bool:
+    """
+    Password requirements logic.
+    """
     if len(admin_password) < 8:
         print("Admin password must be at least 8 characters long")
         return False
@@ -97,7 +88,8 @@ def is_password_valid(admin_password: str) -> bool:
     return True
 
 
-def check_password(db: Connection, username: str, password: str) -> bool:
+def check_password(username: str, password: str) -> bool:
+    db = get_db_connection()
     cursor = db.cursor()
     cursor.execute("SELECT hashed_password FROM users WHERE username = ?", (username,))
     row = cursor.fetchone()

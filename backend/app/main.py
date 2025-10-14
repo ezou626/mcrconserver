@@ -10,8 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .auth import (
-    get_db_connection,
-    initialize_session_table,
     initialize_user_table,
 )
 from .auth import (
@@ -25,14 +23,12 @@ LOG.info("API is starting up")
 LOG.info(uvicorn.Config.asgi_version)
 
 load_dotenv()
+initialize_user_table()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     LOG.info("App is starting up")
-    db = get_db_connection()
-    initialize_user_table(db)
-    initialize_session_table(db)
     task = asyncio.create_task(worker())
     yield
     LOG.info("App is shutting down")
