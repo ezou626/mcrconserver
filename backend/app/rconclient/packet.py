@@ -21,8 +21,6 @@ from .errors import (
     RCONClientTimeout,
 )
 
-print("peen")
-
 logging.basicConfig(level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
