@@ -1,8 +1,24 @@
 from bcrypt import checkpw, gensalt, hashpw
-from sqlite3 import Connection
+from sqlite3 import Connection, connect
+import logging
 
+LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+LOG.info("Auth helpers are being imported")
 
 SPECIAL_CHARACTERS = "!@#$%^&*()-_=+[{]}"
+
+DB_PATH = "database.db"
+LOG.info("Using database at: %s", DB_PATH)
+db = None
+
+
+def get_db_connection():
+    global db
+    if db is not None:
+        return db
+    db = connect(DB_PATH)
+    return db
 
 
 def initialize_user_table(db: Connection):
