@@ -80,8 +80,8 @@ def is_password_valid(admin_password: str) -> bool:
     return True
 
 
-def check_password(sqlitedb, username: str, password: str) -> bool:
-    cursor = sqlitedb.cursor()
+def check_password(db: Connection, username: str, password: str) -> bool:
+    cursor = db.cursor()
     cursor.execute("SELECT hashed_password FROM users WHERE username = ?", (username,))
     row = cursor.fetchone()
     if row is None:

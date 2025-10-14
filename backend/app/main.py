@@ -6,7 +6,7 @@ import uvicorn
 from rconclient import worker, queue_command, get_queue_size
 from contextlib import asynccontextmanager
 import sqlite3
-from helpers import initialize_session_table, initialize_user_table, check_password
+from auth import initialize_session_table, initialize_user_table, check_password
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
