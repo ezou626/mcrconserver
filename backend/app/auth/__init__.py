@@ -3,11 +3,12 @@ from .helpers import (
     get_db_connection,
     initialize_user_table,
 )
-from .router import router
+from .router import router, validate_session
 
 __all__ = [
     "check_password",
     "initialize_user_table",
     "get_db_connection",
     "router",
+    "validate_session",
 ]

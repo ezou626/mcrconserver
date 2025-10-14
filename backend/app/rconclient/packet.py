@@ -106,7 +106,7 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
         "utf-8"
     )  # Exclude the two null bytes at the end
 
-    if response_type == -1:
+    if response_request_id == -1:
         raise RCONClientAuthenticationFailed("Authentication failed")
 
     LOG.debug("Response ID: %d", response_request_id)

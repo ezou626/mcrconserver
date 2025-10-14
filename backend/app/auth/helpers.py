@@ -19,7 +19,7 @@ def get_db_connection():
     global db
     if db is not None:
         return db
-    db = connect(DB_PATH)
+    db = connect(DB_PATH, check_same_thread=False)
     return db
 
 

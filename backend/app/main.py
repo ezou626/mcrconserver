@@ -5,13 +5,11 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .auth import (
-    initialize_user_table,
-)
+from .auth import initialize_user_table, validate_session
 from .auth import (
     router as auth_router,
 )
@@ -70,3 +68,16 @@ def read_root():
 
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+
+
+@app.post("/command")
+async def command(command: str, _user: str = Depends(validate_session)):
+    if not command:
+        return {"success": False, "message": "No command provided"}
+
+    queue_size = get_queue_size()
+    if queue_size >= 100:
+        return {"success": False, "message": "Server is busy. Please try again later."}
+
+    response = queue_command(command)
+    return {"success": True, "response": response}

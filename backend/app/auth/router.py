@@ -42,7 +42,7 @@ def login(
     username: Annotated[str, Form(...)],
     password: Annotated[str, Form(...)],
 ):
-    if validate_session(request):
+    if request.session and request.session.get("username"):
         return {"success": True, "message": "Already logged in"}
 
     if not check_password(username, password):
