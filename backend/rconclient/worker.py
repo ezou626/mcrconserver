@@ -2,8 +2,6 @@ import asyncio
 import logging
 from .packet import send_command, connect, reconnect
 
-request_id = 0
-
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 

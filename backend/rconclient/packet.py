@@ -21,6 +21,8 @@ from .errors import (
     RCONClientTimeout,
 )
 
+print("peen")
+
 logging.basicConfig(level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -58,13 +60,14 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
     if not authenticated and packet_type != RCONPacketType.AUTH_PACKET:
         raise RCONClientNotAuthenticated("Not authenticated")
 
+    global request_id
+
     LOG.debug("Request ID: %d", request_id)
     LOG.debug("Packet type: %s", packet_type.name)
     if packet_type == RCONPacketType.COMMAND_PACKET:
         LOG.debug("Payload: %s", payload)
 
     body_bytes = payload.encode("utf-8")
-    global request_id
 
     packet = (
         struct.pack("<i", len(body_bytes) + PACKET_METADATA_SIZE)  # length
