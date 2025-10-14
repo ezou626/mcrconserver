@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .auth import initialize_user_table, validate_session
+from .auth import initialize_user_table, initialize_keys_table, validate_session
 from .auth import (
     router as auth_router,
 )
@@ -22,6 +22,7 @@ LOG.info(uvicorn.Config.asgi_version)
 
 load_dotenv()
 initialize_user_table()
+initialize_keys_table()
 
 
 @asynccontextmanager
