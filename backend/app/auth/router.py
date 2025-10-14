@@ -2,10 +2,12 @@ import logging
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Request, status
-
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from .helpers import (
+    change_password,
     check_password,
+    create_account,
+    delete_account,
 )
 
 LOG = logging.getLogger(__name__)
@@ -36,6 +38,23 @@ def validate_session(request: Request) -> dict:
     return {"username": username}
 
 
+def check_if_role_is(allowed_roles: list[str]):
+    def validate_role(request: Request) -> dict:
+        session = request.session
+
+        # Ensure session exists and has a username
+        username = session.get("username")
+        role = session.get("role")
+        if not username:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        if role not in allowed_roles:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        return {"username": username, "role": role}
+
+    return validate_role
+
+
 @router.post("/login")
 def login(
     request: Request,
@@ -45,17 +64,87 @@ def login(
     if request.session and request.session.get("username"):
         return {"success": True, "message": "Already logged in"}
 
-    if not check_password(username, password):
+    role = check_password(username, password)
+
+    if not role:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
     request.session["username"] = username
-    return {"success": True, "message": "Login successful"}
+    request.session["role"] = role
+    return {
+        "success": True,
+        "message": "Login successful",
+        "username": username,
+        "role": role,
+    }
 
 
 @router.post("/logout")
 def logout(request: Request):
     request.session.clear()
     return {"success": True, "message": "Logout successful"}
+
+
+@router.get("/account")
+def get_account_info(user=Depends(validate_session)):
+    return {"success": True, "username": user["username"], "role": user["role"]}
+
+
+@router.put("/account")
+def create_account_route(
+    username: Annotated[str, Form(...)],
+    password: Annotated[str, Form(...)],
+    role: Annotated[str, Form(...)],
+    user_role=Depends(check_if_role_is(["owner"])),
+):
+    """For creating accounts of arbitrary users."""
+    if username == user_role["username"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create account with same name as own",
+        )
+    if not create_account(username, password, role):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to create account",
+        )
+    return {"success": True, "message": "Account created successfully"}
+
+
+@router.delete("/account")
+def delete_account_route(
+    username: Annotated[str, Form(...)],
+    user_role=Depends(check_if_role_is(["owner"])),
+):
+    """
+    For deleting accounts of arbitrary users, not self-deletion.
+    """
+    if username == user_role["username"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete own account",
+        )
+    if not delete_account(username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to delete account",
+        )
+    return {"success": True, "message": "Account deleted successfully"}
+
+
+@router.patch("/account/password")
+def change_password_route(
+    new_password: Annotated[str, Form(...)],
+    user=Depends(validate_session),
+):
+    result = change_password(user["username"], new_password)
+
+    if result:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result,
+        )
+    return {"success": True, "message": "Password changed successfully"}
