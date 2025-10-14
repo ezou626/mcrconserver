@@ -79,5 +79,6 @@ async def command(command: str, _user: str = Depends(validate_session)):
     if queue_size >= 100:
         return {"success": False, "message": "Server is busy. Please try again later."}
 
-    response = queue_command(command)
-    return {"success": True, "response": response}
+    if queue_command(command):
+        return {"success": True}
+    return {"success": False, "message": "Failed to process command."}
