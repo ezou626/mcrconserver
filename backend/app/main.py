@@ -68,4 +68,4 @@ def read_root():
 
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
-app.include_router(api_router, prefix="/api", tags=["api"])
+app.include_router(api_router, prefix="/rcon", tags=["rcon"])
