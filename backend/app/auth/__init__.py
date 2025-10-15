@@ -4,7 +4,8 @@ from .account_helpers import (
     initialize_user_table,
     initialize_keys_table,
 )
-from .router import router, validate_session
+from .key_helpers import validate_api_key
+from .router import router, check_if_role_is
 
 __all__ = [
     "check_password",
@@ -12,5 +13,6 @@ __all__ = [
     "initialize_keys_table",
     "get_db_connection",
     "router",
-    "validate_session",
+    "check_if_role_is",
+    "validate_api_key",
 ]

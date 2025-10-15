@@ -4,15 +4,16 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .auth import initialize_user_table, initialize_keys_table, validate_session
+from .auth import initialize_user_table, initialize_keys_table
 from .auth import (
     router as auth_router,
 )
-from .rconclient import get_queue_size, queue_command, worker
+from .router import router as api_router
+from .rconclient import worker
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -67,17 +68,4 @@ def read_root():
 
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
-
-
-@app.post("/command")
-async def command(command: str, _user: str = Depends(validate_session)):
-    if not command:
-        return {"success": False, "message": "No command provided"}
-
-    queue_size = get_queue_size()
-    if queue_size >= 100:
-        return {"success": False, "message": "Server is busy. Please try again later."}
-
-    if queue_command(command):
-        return {"success": True}
-    return {"success": False, "message": "Failed to process command."}
+app.include_router(api_router, prefix="/api", tags=["api"])

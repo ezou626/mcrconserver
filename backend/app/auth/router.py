@@ -174,7 +174,7 @@ def revoke_api_key_route(
     api_key: Annotated[str, Form(...)],
     user=Depends(check_if_role_is(["owner", "admin"])),
 ):
-    if not revoke_api_key(user["username"], api_key):
+    if not revoke_api_key(api_key):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to revoke API key",
@@ -187,7 +187,7 @@ def validate_api_key_route(
     api_key: Annotated[str, Form(...)],
     user=Depends(check_if_role_is(["owner", "admin"])),
 ):
-    if not validate_api_key(user["username"], api_key):
+    if not validate_api_key(api_key):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid API key",
