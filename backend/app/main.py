@@ -28,11 +28,10 @@ initialize_keys_table()
 async def lifespan(app: FastAPI):
     LOG.info("App is starting up")
     task = asyncio.create_task(worker())
-    yield
-    LOG.info("App is shutting down")
     try:
         yield
     finally:
+        LOG.info("App is shutting down")
         # Cancel background task on shutdown
         task.cancel()
         try:

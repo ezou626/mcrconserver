@@ -6,7 +6,7 @@ from .packet import connect, reconnect, send_command
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
-queue: asyncio.Queue = asyncio.Queue()
+queue: asyncio.Queue = asyncio.Queue(maxsize=100)
 
 
 async def worker() -> None:
@@ -26,10 +26,17 @@ async def worker() -> None:
         LOG.debug("Worker got command: %s", next_command)
 
         try:
-            response = send_command(next_command)
+            # send_command is synchronous; consider offloading to a thread if it blocks
+            response = await asyncio.to_thread(send_command, next_command.command)
             LOG.debug("Worker got response: %s", response)
+            next_command.set_command_result(response)
         except Exception as e:
             LOG.error("Worker encountered an error: %s", e)
+            # Propagate the error to the awaiting caller
+            try:
+                next_command.future.set_exception(e)
+            except Exception:
+                pass
             try:
                 reconnect()
             except Exception as re:

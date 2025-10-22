@@ -2,6 +2,10 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+
+from .roles import Role
+
+from .user import User
 from .account_helpers import (
     change_password,
     check_password,
@@ -23,32 +27,27 @@ LOG.info("Auth router is being imported")
 router = APIRouter()
 
 
-def validate_session(request: Request) -> dict:
+def validate_session(request: Request) -> User:
     session = request.session
-
-    # Ensure session exists and has a username
-    username = session.get("username")
-    if not username:
+    data = session.get("user")
+    if not data:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    return {"username": username}
+    # Reconstruct a User object from session-safe data
+    return User(username=data["username"], role=Role(int(data["role"])))
 
 
-def check_if_role_is(allowed_roles: list[str]):
-    def validate_role(request: Request) -> dict:
-        session = request.session
+def validate_role(required_role: Role):
+    def validate_role_inner(request: Request) -> User:
+        user = validate_session(request)
 
-        # Ensure session exists and has a username
-        username = session.get("username")
-        role = session.get("role")
-        if not username:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        if role not in allowed_roles:
-            raise HTTPException(status_code=404, detail="Not found")
+        if not user.role.check_permission(required_role):
+            # Use 403 for forbidden access instead of 404
+            raise HTTPException(status_code=403, detail="Forbidden")
 
-        return {"username": username, "role": role}
+        return user
 
-    return validate_role
+    return validate_role_inner
 
 
 @router.post("/login")
@@ -57,24 +56,24 @@ def login(
     username: Annotated[str, Form(...)],
     password: Annotated[str, Form(...)],
 ):
-    if request.session and request.session.get("username"):
+    if request.session and request.session.get("user"):
         return {"success": True, "message": "Already logged in"}
 
-    role = check_password(username, password)
+    user = check_password(username, password)
 
-    if not role:
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
-    request.session["username"] = username
-    request.session["role"] = role
+    # Store only JSON-serializable session data
+    request.session["user"] = {"username": user.username, "role": int(user.role)}
     return {
         "success": True,
         "message": "Login successful",
-        "username": username,
-        "role": role,
+        "username": user.username,
+        "role": user.role,
     }
 
 
@@ -85,40 +84,49 @@ def logout(request: Request):
 
 
 @router.get("/account")
-def get_account_info(user=Depends(validate_session)):
-    return {"success": True, "username": user["username"], "role": user["role"]}
+def get_account_info(user: User = Depends(validate_session)):
+    return {"success": True, "username": user.username, "role": int(user.role)}
 
 
 @router.put("/account")
 def create_account_route(
     username: Annotated[str, Form(...)],
     password: Annotated[str, Form(...)],
-    role: Annotated[str, Form(...)],
-    user_role=Depends(check_if_role_is(["owner"])),
+    role: Annotated[Role, Form(...)],
+    owner: User = Depends(validate_role(Role.OWNER)),
 ):
-    """For creating accounts of arbitrary users."""
-    if username == user_role["username"]:
+    """
+    For creating accounts of arbitrary users.
+    Only 'owner' can create new accounts.
+    """
+    if username == owner.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot create account with same name as own",
         )
-    if not create_account(username, password, role):
+    new_user = create_account(username, password, role)
+    if not new_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create account",
         )
-    return {"success": True, "message": "Account created successfully"}
+    return {
+        "success": True,
+        "message": "Account created successfully",
+        "username": new_user.username,
+        "role": new_user.role,
+    }
 
 
 @router.delete("/account")
 def delete_account_route(
     username: Annotated[str, Form(...)],
-    user_role=Depends(check_if_role_is(["owner"])),
+    owner=Depends(validate_role(Role.OWNER)),
 ):
     """
-    For deleting accounts of arbitrary users, not self-deletion.
+    For deleting accounts of arbitrary users by the owner, not self-deletion.
     """
-    if username == user_role["username"]:
+    if username == owner.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete own account",
@@ -134,9 +142,9 @@ def delete_account_route(
 @router.patch("/account/password")
 def change_password_route(
     new_password: Annotated[str, Form(...)],
-    user=Depends(validate_session),
+    user: User = Depends(validate_session),
 ):
-    result = change_password(user["username"], new_password)
+    result = change_password(user.username, new_password)
 
     if result:
         raise HTTPException(
@@ -147,8 +155,8 @@ def change_password_route(
 
 
 @router.put("/api-key")
-def create_api_key_route(user=Depends(check_if_role_is(["owner", "admin"]))):
-    api_key = generate_api_key(user["username"])
+def create_api_key_route(user=Depends(validate_role(Role.ADMIN))):
+    api_key = generate_api_key(user.username)
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -158,13 +166,13 @@ def create_api_key_route(user=Depends(check_if_role_is(["owner", "admin"]))):
 
 
 @router.get("/api-key")
-def list_api_keys_route(user=Depends(check_if_role_is(["owner", "admin"]))):
-    api_keys = list_api_keys(user["username"])
+def list_api_keys_route(user=Depends(validate_role(Role.ADMIN))):
+    api_keys = list_api_keys(user.username)
     return {"success": True, "api_keys": api_keys}
 
 
 @router.get("/api-key/all")
-def list_all_api_keys_route(user=Depends(check_if_role_is(["owner"]))):
+def list_all_api_keys_route(user=Depends(validate_role(Role.OWNER))):
     api_keys = list_all_api_keys()
     return {"success": True, "api_keys": api_keys}
 
@@ -172,7 +180,7 @@ def list_all_api_keys_route(user=Depends(check_if_role_is(["owner"]))):
 @router.delete("/api-key")
 def revoke_api_key_route(
     api_key: Annotated[str, Form(...)],
-    user=Depends(check_if_role_is(["owner", "admin"])),
+    user=Depends(validate_role(Role.ADMIN)),
 ):
     if not revoke_api_key(api_key):
         raise HTTPException(
@@ -185,7 +193,7 @@ def revoke_api_key_route(
 @router.post("/api-key/validate")
 def validate_api_key_route(
     api_key: Annotated[str, Form(...)],
-    user=Depends(check_if_role_is(["owner", "admin"])),
+    user=Depends(validate_role(Role.ADMIN)),
 ):
     if not validate_api_key(api_key):
         raise HTTPException(

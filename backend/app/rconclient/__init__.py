@@ -1,4 +1,5 @@
-from .client import get_queue_size, queue_command
+from .client import queue_command
 from .worker import worker
+from .command import RCONCommand
 
-__all__ = ["worker", "queue_command", "get_queue_size"]
+__all__ = ["worker", "queue_command", "RCONCommand"]

@@ -142,6 +142,8 @@ def connect(
     # tcp socket to localhost:port with 2 second timeout
     rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     rcon_socket.settimeout(timeout)
+    global socket_timeout
+    socket_timeout = timeout
     rcon_socket.connect((host, port))
 
     # authenticate
@@ -173,6 +175,8 @@ def set_timeout(timeout: int | None) -> None:
         raise RCONClientNotConnected("Not connected")
 
     rcon_socket.settimeout(timeout)
+    global socket_timeout
+    socket_timeout = timeout
 
 
 def reconnect() -> None:
