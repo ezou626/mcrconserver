@@ -17,13 +17,5 @@ async def command(command: str, user: User = Depends(validate_role(Role.ADMIN)))
 
 
 @router.post("/key/command")
-async def command_with_api_key(command: str, api_key: str):
-    if not api_key:
-        return {"success": False, "message": "No API key provided"}
-
-    user = validate_api_key(api_key)
-
-    if not user:
-        return {"success": False, "message": "Invalid API key"}
-
+async def command_with_api_key(command: str, user: User = Depends(validate_api_key)):
     return await queue_command(command, user)

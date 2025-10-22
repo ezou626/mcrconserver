@@ -1,11 +1,14 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader
+from .user import User
+
+from .db_connection import get_db_connection
 
 from .roles import Role
 
-from .user import User
 from .account_helpers import (
     change_password,
     check_password,
@@ -17,7 +20,6 @@ from .key_helpers import (
     list_api_keys,
     list_all_api_keys,
     revoke_api_key,
-    validate_api_key,
 )
 
 LOG = logging.getLogger(__name__)
@@ -26,14 +28,47 @@ LOG.info("Auth router is being imported")
 
 router = APIRouter()
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
+
+
+def validate_api_key(api_key: str = Security(api_key_header)) -> User | None:
+    """
+    Validate the given API key and return the associated User. Allows us to act as an authenticated user.
+
+    Raises:
+        HTTPException with 401 status if the API key is invalid.
+    """
+    db = get_db_connection()
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT username FROM api_keys WHERE api_key = ?",
+        (api_key,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
+        )
+
+    cursor.execute(
+        "SELECT role FROM users WHERE username = ?",
+        (row[0],),
+    )
+    role_row = cursor.fetchone()
+    if not role_row:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
+        )
+
+    return User(row[0], role=Role(int(role_row[0])))
+
 
 def validate_session(request: Request) -> User:
-    session = request.session
-    data = session.get("user")
+    if not request.session:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    data = request.session.get("user")
     if not data:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
-    # Reconstruct a User object from session-safe data
     return User(username=data["username"], role=Role(int(data["role"])))
 
 
@@ -192,7 +227,7 @@ def revoke_api_key_route(
 
 @router.post("/api-key/validate")
 def validate_api_key_route(
-    api_key: Annotated[str, Form(...)],
+    api_key: str = Depends(validate_api_key),
     user=Depends(validate_role(Role.ADMIN)),
 ):
     if not validate_api_key(api_key):

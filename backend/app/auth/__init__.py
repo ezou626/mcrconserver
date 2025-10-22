@@ -4,8 +4,7 @@ from .account_helpers import (
     initialize_keys_table,
 )
 from .db_connection import get_db_connection
-from .key_helpers import validate_api_key
-from .router import router, validate_role
+from .router import router, validate_role, validate_api_key
 from .user import User
 from .roles import Role
 
