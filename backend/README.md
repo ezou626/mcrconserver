@@ -1,19 +1,23 @@
-## Backend
+# Minecraft RCON Server
 
-### Run tests
+Web admin UI for managing MC servers
+
+HTTPS should be provided by a reverse proxy like Nginx
+
+## Run
+
+```bash
+uv run fastapi run main:app --host 0.0.0.0 --port 8000 # or whatever port
+```
+
+## Test
 
 This project uses the built-in unittest framework. Tests live under `tests/` and automatically isolate a temporary SQLite database per test.
 
 Using uv (recommended):
 
-```
-uv run -q python -m unittest -v
-```
-
-Using Python directly:
-
-```
-python -m unittest -v
+```bash
+uv run -m unittest -v
 ```
 
 Notes:
