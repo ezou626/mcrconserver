@@ -8,6 +8,8 @@ export interface User {
 export interface LoginResponse {
   success: boolean;
   message: string;
+  access_token?: string;
+  token_type?: string;
   username?: string;
   role?: number;
 }
@@ -23,6 +25,33 @@ export interface ApiError {
   detail: string;
 }
 
+// JWT Token Management
+class TokenManager {
+  private static readonly TOKEN_KEY = 'jwt_access_token';
+
+  static setToken(token: string): void {
+    localStorage.setItem(this.TOKEN_KEY, token);
+  }
+
+  static getToken(): string | null {
+    return localStorage.getItem(this.TOKEN_KEY);
+  }
+
+  static removeToken(): void {
+    localStorage.removeItem(this.TOKEN_KEY);
+  }
+
+  static isTokenExpired(token: string): boolean {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const exp = payload.exp * 1000; // Convert to milliseconds
+      return Date.now() >= exp;
+    } catch {
+      return true; // If we can't parse it, consider it expired
+    }
+  }
+}
+
 class ApiService {
   private async request<T>(
     endpoint: string,
@@ -30,10 +59,19 @@ class ApiService {
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
 
+    // Get token and add Authorization header if available
+    const token = TokenManager.getToken();
+    const defaultHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token && !TokenManager.isTokenExpired(token)) {
+      defaultHeaders.Authorization = `Bearer ${token}`;
+    }
+
     const defaultOptions: RequestInit = {
-      credentials: 'include', // Include cookies for session management
       headers: {
-        'Content-Type': 'application/json',
+        ...defaultHeaders,
         ...options.headers,
       },
       ...options,
@@ -43,6 +81,11 @@ class ApiService {
       const response = await fetch(url, defaultOptions);
 
       if (!response.ok) {
+        // If 401 and we have a token, it might be expired - remove it
+        if (response.status === 401 && token) {
+          TokenManager.removeToken();
+        }
+
         const errorData: ApiError = await response.json().catch(() => ({
           detail: `HTTP ${response.status}: ${response.statusText}`,
         }));
@@ -65,7 +108,7 @@ class ApiService {
   ): Promise<T> {
     return this.request<T>(endpoint, {
       method,
-      headers: {}, // Let browser set Content-Type for FormData
+      headers: {}, // Let browser set Content-Type for FormData, but auth header will be added by request()
       body: formData,
     });
   }
@@ -75,13 +118,31 @@ class ApiService {
     formData.append('username', username);
     formData.append('password', password);
 
-    return this.requestWithFormData<LoginResponse>('/auth/login', formData);
+    const response = await this.requestWithFormData<LoginResponse>(
+      '/auth/login',
+      formData
+    );
+
+    // Store JWT token if login was successful
+    if (response.success && response.access_token) {
+      TokenManager.setToken(response.access_token);
+    }
+
+    return response;
   }
 
   async logout(): Promise<{ success: boolean; message: string }> {
-    return this.request<{ success: boolean; message: string }>('/auth/logout', {
-      method: 'POST',
-    });
+    const response = await this.request<{ success: boolean; message: string }>(
+      '/auth/logout',
+      {
+        method: 'POST',
+      }
+    );
+
+    // Remove token from storage
+    TokenManager.removeToken();
+
+    return response;
   }
 
   async getAccountInfo(): Promise<{
@@ -109,11 +170,26 @@ class ApiService {
 
   async checkSession(): Promise<boolean> {
     try {
+      const token = TokenManager.getToken();
+
+      // If no token or token is expired, return false
+      if (!token || TokenManager.isTokenExpired(token)) {
+        TokenManager.removeToken();
+        return false;
+      }
+
+      // Verify token by calling account info
       await this.getAccountInfo();
       return true;
     } catch {
+      TokenManager.removeToken();
       return false;
     }
+  }
+
+  // Manually clear authentication state
+  clearAuth(): void {
+    TokenManager.removeToken();
   }
 }
 

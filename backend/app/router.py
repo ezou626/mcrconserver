@@ -4,7 +4,7 @@ This is the core api router, separated from setup of server
 
 from fastapi import APIRouter, Depends
 
-from .auth import validate_role, validate_api_key, User, Role
+from .auth import validate_api_key, validate_jwt_token, User, Role
 
 from .rconclient import queue_command
 
@@ -14,9 +14,15 @@ router = APIRouter()
 @router.post("/session/command")
 async def command(
     command: str,
-    user: User = Depends(validate_role(Role.ADMIN)),
+    user: User = Depends(validate_jwt_token),
     require_result: bool = True,
 ):
+    # Check if user has required permissions
+    if not user.role.check_permission(Role.ADMIN):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     return await queue_command(command, user, require_result=require_result)
 
 

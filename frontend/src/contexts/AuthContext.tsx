@@ -116,6 +116,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Always clear local auth state and token
+      apiService.clearAuth();
       dispatch({ type: 'AUTH_LOGOUT' });
     }
   };

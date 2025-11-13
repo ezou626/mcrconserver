@@ -1,12 +1,12 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, Security, status
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, Depends, Form, HTTPException, Security, status
+from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 from .user import User
 
 from .db_connection import get_db_connection
-
+from .jwt_auth import jwt_auth
 from .roles import Role
 
 from .account_helpers import (
@@ -29,6 +29,7 @@ LOG.info("Auth router is being imported")
 router = APIRouter()
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
+bearer_scheme = HTTPBearer(auto_error=True)
 
 
 def validate_api_key(api_key: str = Security(api_key_header)) -> User | None:
@@ -63,19 +64,20 @@ def validate_api_key(api_key: str = Security(api_key_header)) -> User | None:
     return User(row[0], role=Role(int(role_row[0])))
 
 
-def validate_session(request: Request) -> User:
-    if not request.session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    data = request.session.get("user")
-    if not data:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return User(username=data["username"], role=Role(int(data["role"])))
+def validate_jwt_token(
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+) -> User:
+    """
+    Validate JWT token and return the associated User.
+
+    Raises:
+        HTTPException with 401 status if the token is invalid.
+    """
+    return jwt_auth.verify_token(credentials.credentials)
 
 
 def validate_role(required_role: Role):
-    def validate_role_inner(request: Request) -> User:
-        user = validate_session(request)
-
+    def validate_role_inner(user: User = Depends(validate_jwt_token)) -> User:
         if not user.role.check_permission(required_role):
             # Use 403 for forbidden access instead of 404
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -87,13 +89,9 @@ def validate_role(required_role: Role):
 
 @router.post("/login")
 def login(
-    request: Request,
     username: Annotated[str, Form(...)],
     password: Annotated[str, Form(...)],
 ):
-    if request.session and request.session.get("user"):
-        return {"success": True, "message": "Already logged in"}
-
     user = check_password(username, password)
 
     if not user:
@@ -102,24 +100,42 @@ def login(
             detail="Invalid username or password",
         )
 
-    # Store only JSON-serializable session data
-    request.session["user"] = {"username": user.username, "role": int(user.role)}
+    # Generate JWT token
+    access_token = jwt_auth.create_access_token(user)
+
     return {
         "success": True,
         "message": "Login successful",
+        "access_token": access_token,
+        "token_type": "bearer",
         "username": user.username,
-        "role": user.role,
+        "role": int(user.role),
+    }
+
+
+@router.post("/refresh")
+def refresh_token(user: User = Depends(validate_jwt_token)):
+    """
+    Refresh the JWT token for authenticated user.
+    """
+    access_token = jwt_auth.create_access_token(user)
+    return {
+        "success": True,
+        "access_token": access_token,
+        "token_type": "bearer",
     }
 
 
 @router.post("/logout")
-def logout(request: Request):
-    request.session.clear()
+def logout():
+    """
+    Logout endpoint. With JWT, logout is handled client-side by discarding the token.
+    """
     return {"success": True, "message": "Logout successful"}
 
 
 @router.get("/account")
-def get_account_info(user: User = Depends(validate_session)):
+def get_account_info(user: User = Depends(validate_jwt_token)):
     return {"success": True, "username": user.username, "role": int(user.role)}
 
 
@@ -177,7 +193,7 @@ def delete_account_route(
 @router.patch("/account/password")
 def change_password_route(
     new_password: Annotated[str, Form(...)],
-    user: User = Depends(validate_session),
+    user: User = Depends(validate_jwt_token),
 ):
     result = change_password(user.username, new_password)
 

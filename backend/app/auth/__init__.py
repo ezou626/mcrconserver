@@ -4,7 +4,7 @@ from .account_helpers import (
     initialize_keys_table,
 )
 from .db_connection import get_db_connection
-from .router import router, validate_role, validate_api_key
+from .router import router, validate_role, validate_api_key, validate_jwt_token
 from .user import User
 from .roles import Role
 
@@ -16,6 +16,7 @@ __all__ = [
     "router",
     "validate_role",
     "validate_api_key",
+    "validate_jwt_token",
     "User",
     "Role",
 ]
