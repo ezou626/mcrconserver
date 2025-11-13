@@ -79,8 +79,8 @@ def password_requirements(password: str) -> str | None:
     """
     Password requirements logic.
     """
-    if len(password) < 20:
-        return "Owner password must be at least 20 characters long"
+    if len(password) > 20:  # passphrases are allowed
+        return None
     if not any(c.isupper() for c in password):
         return "Owner password must contain at least one uppercase letter"
     if not any(c.islower() for c in password):
