@@ -7,7 +7,7 @@ from app.auth.account_helpers import (
 from app.auth.roles import Role
 from app.auth.db_connection import get_db_connection
 
-from test_base import DBTestCase, TEST_OWNER_PASSWORD, TEST_OWNER_USERNAME
+from tests.test_base import DBTestCase, TEST_OWNER_PASSWORD, TEST_OWNER_USERNAME
 
 
 class TestAccountHelpers(DBTestCase):

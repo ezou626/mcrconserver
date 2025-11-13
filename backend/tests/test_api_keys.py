@@ -7,7 +7,7 @@ from app.auth.key_helpers import (
 )
 from app.auth.roles import Role
 
-from test_base import DBTestCase, TEST_OWNER_USERNAME
+from tests.test_base import DBTestCase, TEST_OWNER_USERNAME
 
 
 class TestApiKeys(DBTestCase):
