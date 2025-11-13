@@ -5,13 +5,15 @@ from fastapi.security import APIKeyHeader
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
+API_KEY_LENGTH = 128
+
 
 def generate_api_key(username: str) -> str | None:
     """
     Generate a secure API key for the given username.
     """
 
-    api_key = secrets.token_urlsafe(64)
+    api_key = secrets.token_urlsafe(API_KEY_LENGTH)
 
     try:
         db = get_db_connection()

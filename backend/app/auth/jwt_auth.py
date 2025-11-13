@@ -12,7 +12,7 @@ from .roles import Role
 class JWTAuth:
     def __init__(self):
         # For single-session applications, runtime key generation is simpler
-        self.secret_key = os.urandom(256).hex()
+        self.secret_key = os.urandom(128).hex()
         self.algorithm = "HS256"
         self.access_token_expire_minutes = 60 * 24 * 7  # 7 days
 
