@@ -15,7 +15,9 @@ LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
 
-async def queue_command(command: str | None, user: User) -> dict:
+async def queue_command(
+    command: str | None, user: User, require_result: bool = True
+) -> dict:
     """
     Queues a command to be sent to the RCON server.
 
@@ -41,6 +43,8 @@ async def queue_command(command: str | None, user: User) -> dict:
 
     try:
         queue.put_nowait(task)
+        if not require_result:
+            return {"queued": True, "message": "Command queued successfully"}
         result = await future
         return {"processed": True, "message": result}
     except Exception as e:

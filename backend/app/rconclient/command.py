@@ -3,7 +3,7 @@ from ..auth.user import User
 
 
 class RCONCommand:
-    def __init__(self, command: str, user: User, future: Future):
+    def __init__(self, command: str, user: User, future: Future | None = None):
         self.command = command
         self.user = user
         self.future = future
@@ -12,4 +12,5 @@ class RCONCommand:
         return f"RCONCommand(command={self.command}, user={self.user.username}, future={self.future})"
 
     def set_command_result(self, command_result: str) -> None:
-        self.future.set_result(command_result)
+        if self.future:
+            self.future.set_result(command_result)
