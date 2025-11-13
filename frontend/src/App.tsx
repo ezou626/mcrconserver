@@ -9,6 +9,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Console from './pages/Console';
+import ApiKeys from './pages/ApiKeys';
 
 function App() {
   return (
@@ -21,6 +22,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Console />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/keys"
+            element={
+              <ProtectedRoute>
+                <ApiKeys />
               </ProtectedRoute>
             }
           />

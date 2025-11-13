@@ -25,6 +25,27 @@ export interface ApiError {
   detail: string;
 }
 
+export interface ApiKey {
+  api_key: string;
+  created_at: string;
+  username?: string; // Only present in all keys response for owners
+}
+
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total_count: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface ApiKeysResponse {
+  success: boolean;
+  api_keys: ApiKey[];
+  pagination: PaginationInfo;
+}
+
 // JWT Token Management
 class TokenManager {
   private static readonly TOKEN_KEY = 'jwt_access_token';
@@ -106,9 +127,17 @@ class ApiService {
     formData: FormData,
     method: string = 'POST'
   ): Promise<T> {
+    // Get token for auth header
+    const token = TokenManager.getToken();
+    const authHeaders: HeadersInit = {};
+
+    if (token && !TokenManager.isTokenExpired(token)) {
+      authHeaders.Authorization = `Bearer ${token}`;
+    }
+
     return this.request<T>(endpoint, {
       method,
-      headers: {}, // Let browser set Content-Type for FormData, but auth header will be added by request()
+      headers: authHeaders, // Only include auth header, let browser set Content-Type for FormData
       body: formData,
     });
   }
@@ -190,6 +219,50 @@ class ApiService {
   // Manually clear authentication state
   clearAuth(): void {
     TokenManager.removeToken();
+  }
+
+  // API Key management
+  async createApiKey(): Promise<{ success: boolean; api_key: string }> {
+    return this.request<{ success: boolean; api_key: string }>(
+      '/auth/api-key',
+      {
+        method: 'PUT',
+      }
+    );
+  }
+
+  async listApiKeys(
+    page: number = 1,
+    limit: number = 10
+  ): Promise<ApiKeysResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    return this.request<ApiKeysResponse>(`/auth/api-key?${params}`);
+  }
+
+  async listAllApiKeys(
+    page: number = 1,
+    limit: number = 10
+  ): Promise<ApiKeysResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    return this.request<ApiKeysResponse>(`/auth/api-key/all?${params}`);
+  }
+
+  async revokeApiKey(
+    apiKey: string
+  ): Promise<{ success: boolean; message: string }> {
+    const formData = new FormData();
+    formData.append('api_key', apiKey);
+    return this.requestWithFormData<{ success: boolean; message: string }>(
+      '/auth/api-key',
+      formData,
+      'DELETE'
+    );
   }
 }
 

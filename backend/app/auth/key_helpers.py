@@ -40,25 +40,49 @@ def revoke_api_key(api_key: str):
     return cursor.rowcount
 
 
-def list_api_keys(username: str) -> list[tuple[str, str]]:
+def list_api_keys(
+    username: str, page: int = 1, limit: int = 10
+) -> tuple[list[tuple[str, str]], int]:
     """
-    List all API keys for the given username.
+    List API keys for the given username with pagination.
+    Returns tuple of (api_keys, total_count)
     """
     db = get_db_connection()
     cursor = db.cursor()
+
+    # Get total count
+    cursor.execute("SELECT COUNT(*) FROM api_keys WHERE username = ?", (username,))
+    total_count = cursor.fetchone()[0]
+
+    # Get paginated results
+    offset = (page - 1) * limit
     cursor.execute(
-        "SELECT api_key, created_at FROM api_keys WHERE username = ?", (username,)
+        "SELECT api_key, created_at FROM api_keys WHERE username = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (username, limit, offset),
     )
     rows = cursor.fetchall()
-    return [(row[0], row[1]) for row in rows]
+    return [(row[0], row[1]) for row in rows], total_count
 
 
-def list_all_api_keys() -> list[tuple[str, str, str]]:
+def list_all_api_keys(
+    page: int = 1, limit: int = 10
+) -> tuple[list[tuple[str, str, str]], int]:
     """
-    List all API keys for all users.
+    List all API keys for all users with pagination.
+    Returns tuple of (api_keys, total_count)
     """
     db = get_db_connection()
     cursor = db.cursor()
-    cursor.execute("SELECT api_key, username, created_at FROM api_keys")
+
+    # Get total count
+    cursor.execute("SELECT COUNT(*) FROM api_keys")
+    total_count = cursor.fetchone()[0]
+
+    # Get paginated results
+    offset = (page - 1) * limit
+    cursor.execute(
+        "SELECT api_key, username, created_at FROM api_keys ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        (limit, offset),
+    )
     rows = cursor.fetchall()
-    return [(row[0], row[1], row[2]) for row in rows]
+    return [(row[0], row[1], row[2]) for row in rows], total_count

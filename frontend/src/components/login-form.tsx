@@ -33,7 +33,10 @@ export function LoginForm({
   // Navigate to console on successful login
   useEffect(() => {
     if (state.isAuthenticated) {
-      navigate('/console');
+      // Try to get the intended destination from URL params or localStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectTo = urlParams.get('redirect') || '/console';
+      navigate(redirectTo);
     }
   }, [state.isAuthenticated, navigate]);
 

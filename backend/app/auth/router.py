@@ -217,15 +217,72 @@ def create_api_key_route(user=Depends(validate_role(Role.ADMIN))):
 
 
 @router.get("/api-key")
-def list_api_keys_route(user=Depends(validate_role(Role.ADMIN))):
-    api_keys = list_api_keys(user.username)
-    return {"success": True, "api_keys": api_keys}
+def list_api_keys_route(
+    page: int = 1, limit: int = 10, user=Depends(validate_role(Role.ADMIN))
+):
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page must be greater than 0",
+        )
+    if limit < 1 or limit > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Limit must be between 1 and 100",
+        )
+
+    api_keys, total_count = list_api_keys(user.username, page, limit)
+    total_pages = (total_count + limit - 1) // limit  # Ceiling division
+
+    return {
+        "success": True,
+        "api_keys": [
+            {"api_key": key, "created_at": created_at} for key, created_at in api_keys
+        ],
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+        },
+    }
 
 
 @router.get("/api-key/all")
-def list_all_api_keys_route(user=Depends(validate_role(Role.OWNER))):
-    api_keys = list_all_api_keys()
-    return {"success": True, "api_keys": api_keys}
+def list_all_api_keys_route(
+    page: int = 1, limit: int = 10, user=Depends(validate_role(Role.OWNER))
+):
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page must be greater than 0",
+        )
+    if limit < 1 or limit > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Limit must be between 1 and 100",
+        )
+
+    api_keys, total_count = list_all_api_keys(page, limit)
+    total_pages = (total_count + limit - 1) // limit  # Ceiling division
+
+    return {
+        "success": True,
+        "api_keys": [
+            {"api_key": key, "username": username, "created_at": created_at}
+            for key, username, created_at in api_keys
+        ],
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+        },
+    }
 
 
 @router.delete("/api-key")

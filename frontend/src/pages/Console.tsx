@@ -177,6 +177,16 @@ export default function Console() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {(authState.user?.role === 0 ||
+                    authState.user?.role === 1) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate('/keys')}
+                    >
+                      API Keys
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={clearHistory}>
                     Clear History
                   </Button>
