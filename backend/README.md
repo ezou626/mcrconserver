@@ -3,6 +3,7 @@
 Web admin UI for managing MC servers
 
 HTTPS should be provided by a reverse proxy like Nginx
+To use the UI only (not the API), SSH tunnelling is also ok.
 
 ## Run
 
