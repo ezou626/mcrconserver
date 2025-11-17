@@ -21,28 +21,25 @@ jobs:
       - name: Set repository name variable
         run: echo "REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d '/' -f 2)" >> $GITHUB_ENV
       - name: Create distribution folder
-        run: |
-          mkdir "~/${{ env.REPO_NAME }}"
-          mkdir "~/${{ env.REPO_NAME }}/dist"
+        run: mkdir -p "$HOME/${{ env.REPO_NAME }}/dist"
 
       # build frontend
       - name: Setup Node.js to build extension
         uses: actions/setup-node@v4
       - name: Install frontend dependencies
         working-directory: ./frontend
-        run: |
-          npm install
+        run: npm install
       - name: Build extension
         working-directory: ./frontend
         run: |
           rm -Rf dist
           npm run build
-          mv dist "~/${{ env.REPO_NAME }}/dist/static"
+          mv dist "$HOME/${{ env.REPO_NAME }}/dist/static"
 
       # build backend
       - name: Move app folder to zip
         working-directory: ./backend
-        run: mv app "~/${{ env.REPO_NAME }}/dist/app"
+        run: mv app "$HOME/${{ env.REPO_NAME }}/dist/app"
 
       # tagging and release
       - name: Set date and SHA variables
@@ -54,7 +51,7 @@ jobs:
           echo "RELEASE_NAME=${{ env.REPO_NAME }}-$(date +'%Y%m%d-%H%M').zip" >> $GITHUB_ENV
 
       - name: Zip the extension folder
-        run: zip -r "${{ env.RELEASE_NAME }}" "~/${{ env.REPO_NAME }}/dist"
+        run: zip -r "${{ env.RELEASE_NAME }}" "$HOME/${{ env.REPO_NAME }}/dist"
 
       - name: Create and push tag
         run: |
