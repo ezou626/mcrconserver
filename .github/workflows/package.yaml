@@ -54,7 +54,9 @@ jobs:
         run: ls -l "$HOME/${{ env.REPO_NAME }}/dist"
 
       - name: Zip the distribution folder
-        run: zip -r "${{ env.RELEASE_NAME }}" "$HOME/${{ env.REPO_NAME }}/dist"
+        working-directory: "$HOME/${{ env.REPO_NAME }}/dist"
+        run: |
+          zip -r "$GITHUB_WORKSPACE/${{ env.RELEASE_NAME }}" .
 
       - name: Create and push tag
         run: |
