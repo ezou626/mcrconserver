@@ -58,8 +58,10 @@ jobs:
         run: ls -l "$HOME/${{ env.REPO_NAME }}/dist"
 
       - name: Zip the distribution folder
-        working-directory: "$HOME/${{ env.REPO_NAME }}/dist"
-        run: zip -r "${{ env.RELEASE_NAME }}" .
+        run: |
+          cd "$HOME/${{ env.REPO_NAME }}/dist"
+          zip -r "${{ env.RELEASE_NAME }}" .
+          cd "$HOME"
 
       - name: Create and push tag
         run: |
