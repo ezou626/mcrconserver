@@ -39,7 +39,11 @@ jobs:
       # build backend
       - name: Move app folder to zip
         working-directory: ./backend
-        run: mv app "$HOME/${{ env.REPO_NAME }}/dist/app"
+        run: |
+          mv app "$HOME/${{ env.REPO_NAME }}/dist/app"
+          mv pyproject.toml "$HOME/${{ env.REPO_NAME }}/dist"
+          mv .python-version "$HOME/${{ env.REPO_NAME }}/dist"
+          mv uv.lock "$HOME/${{ env.REPO_NAME }}/dist"
 
       # tagging and release
       - name: Set date and SHA variables
@@ -55,8 +59,7 @@ jobs:
 
       - name: Zip the distribution folder
         working-directory: "$HOME/${{ env.REPO_NAME }}/dist"
-        run: |
-          zip -r "$GITHUB_WORKSPACE/${{ env.RELEASE_NAME }}" .
+        run: zip -r "${{ env.RELEASE_NAME }}" .
 
       - name: Create and push tag
         run: |
