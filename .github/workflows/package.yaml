@@ -60,7 +60,7 @@ jobs:
       - name: Zip the distribution folder
         run: |
           cd "$HOME/${{ env.REPO_NAME }}/dist"
-          zip -r "${{ env.RELEASE_NAME }}" .
+          zip -r "$HOME/${{ env.RELEASE_NAME }}" .
           cd "$HOME"
 
       - name: Create and push tag
