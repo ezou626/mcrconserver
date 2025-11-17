@@ -8,7 +8,6 @@ Allows for easy administration of a Minecraft server over network
 
 - Web UI for seamless management for admins
 - API for integrations (Discord bot, for example)
-- Fast setup
 
 ## Implementation Details
 
