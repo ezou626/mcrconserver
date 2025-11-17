@@ -57,7 +57,7 @@ jobs:
       - name: Zip the distribution folder
         run: |
           cd "$HOME/${{ env.REPO_NAME }}/dist"
-          zip -r "$HOME/${{ env.RELEASE_NAME }}" .
+          zip -r "$GITHUB_WORKSPACE/${{ env.RELEASE_NAME }}" .
           cd "$HOME"
 
       - name: Check the distribution folder
@@ -73,7 +73,7 @@ jobs:
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v1
         with:
-          files: "$HOME/${{ env.RELEASE_NAME }}"
+          files: "${{ env.RELEASE_NAME }}"
           name: "Release v${{ env.DATE }}"
           body: "Release for commit ${{ env.SHA }} on date ${{ env.DATE }}"
           tag_name: "${{ env.TAG_NAME }}"
