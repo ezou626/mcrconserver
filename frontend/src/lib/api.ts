@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:8000';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const API_BASE_URL = (window as any).__APP_CONFIG__.API_BASE_URL;
 
 export interface User {
   username: string;
