@@ -7,14 +7,9 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
-      actions: write
-      checks: write
       contents: write
-      deployments: write
-      pull-requests: write
-      repository-projects: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -58,7 +53,6 @@ jobs:
         run: |
           cd "$HOME/${{ env.REPO_NAME }}/dist"
           zip -r "$GITHUB_WORKSPACE/${{ env.RELEASE_NAME }}" .
-          cd "$HOME"
 
       - name: Check the distribution folder
         run: ls -l "$HOME/${{ env.REPO_NAME }}/dist"
