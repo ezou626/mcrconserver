@@ -45,7 +45,7 @@ jobs:
       - name: Set date and SHA variables
         id: vars
         run: |
-          echo "DATE=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+          echo "DATE=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
           echo "SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "TAG_NAME=v$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
           echo "RELEASE_NAME=${{ env.REPO_NAME }}-$(date +'%Y%m%d-%H%M').zip" >> $GITHUB_ENV
