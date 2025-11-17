@@ -54,14 +54,14 @@ jobs:
           echo "TAG_NAME=v$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
           echo "RELEASE_NAME=${{ env.REPO_NAME }}-$(date +'%Y%m%d-%H%M').zip" >> $GITHUB_ENV
 
-      - name: Check the distribution folder
-        run: ls -l "$HOME/${{ env.REPO_NAME }}/dist"
-
       - name: Zip the distribution folder
         run: |
           cd "$HOME/${{ env.REPO_NAME }}/dist"
           zip -r "$HOME/${{ env.RELEASE_NAME }}" .
           cd "$HOME"
+
+      - name: Check the distribution folder
+        run: ls -l "$HOME/${{ env.REPO_NAME }}/dist"
 
       - name: Create and push tag
         run: |
@@ -73,7 +73,7 @@ jobs:
       - name: Create Release & Upload Asset
         uses: softprops/action-gh-release@v1
         with:
-          files: "${{ env.RELEASE_NAME }}"
+          files: "$HOME/${{ env.RELEASE_NAME }}"
           name: "Release v${{ env.DATE }}"
           body: "Release for commit ${{ env.SHA }} on date ${{ env.DATE }}"
           tag_name: "${{ env.TAG_NAME }}"
