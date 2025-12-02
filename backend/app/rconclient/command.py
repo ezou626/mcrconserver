@@ -13,8 +13,8 @@ class RCONCommand:
 
     def __repr__(self) -> str:
         return (
-            f"RCONCommand(command={self.command!r}, "
-            f"user={self.user.username!r}, "
+            f"RCONCommand(command={self.command}, "
+            f"user={self.user!r}, "
             f"future_set={self.future is not None})"
         )
 
