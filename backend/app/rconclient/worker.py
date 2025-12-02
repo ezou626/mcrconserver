@@ -6,7 +6,7 @@ from .packet import connect, reconnect, send_command
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
-queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+queue: asyncio.Queue = asyncio.Queue()
 
 
 async def worker() -> None:
