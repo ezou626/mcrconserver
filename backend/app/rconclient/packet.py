@@ -150,7 +150,6 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
 def connect(
     password: str,
     port: int = 25575,
-    host: str = "localhost",
     timeout: int | None = None,
 ) -> None:
     """
@@ -177,19 +176,20 @@ def connect(
 
     rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        rcon_socket.connect((host, port))
+        # only designed for localhost connections currently
+        rcon_socket.connect(("localhost", port))
         rcon_socket.settimeout(timeout)
     except ConnectionRefusedError:
         rcon_socket = None
         raise
     except TimeoutError as e:
         rcon_socket = None
-        LOGGER.error("Connection to RCON server at %s:%d timed out", host, port)
+        LOGGER.error("Connection to RCON server at %s:%d timed out", "localhost", port)
         raise RCONClientTimeout("Connection timed out") from e
     except OSError as e:
         rcon_socket = None
         LOGGER.error(
-            "OS error when connecting to RCON server at %s:%d: %s", host, port, e
+            "OS error when connecting to RCON server at %s:%d: %s", "localhost", port, e
         )
         raise
 
