@@ -38,19 +38,18 @@ async def queue_command(command: str, user: User) -> QueueCommandResult:
         return QueueCommandResult(
             command=task,
             queued=True,
-            message="Command queued successfully",
         )
     except QueueShutDown:
         LOG.error("Queue terminated unexpectedly")
         return QueueCommandResult(
             command=task,
             queued=False,
-            message="Queue terminated unexpectedly",
+            error="Queue terminated unexpectedly",
         )
     except Exception as e:
         LOG.error("Failed to queue command: %s", e)
         return QueueCommandResult(
             command=task,
             queued=False,
-            message=str(e),
+            error=str(e),
         )
