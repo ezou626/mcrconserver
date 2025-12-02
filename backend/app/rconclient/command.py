@@ -6,12 +6,30 @@ from ..auth.user import User
 
 @dataclass
 class RCONCommand:
+    """
+    Represents a command for the RCON server, including the command string, the user
+    and an optional Future to hold the result.
+
+    Attributes:
+        command: The RCON command string to be sent to the server
+        user: The User who issued the command
+        _result: An optional Future to hold the result of the command
+        error: An optional error message if the command failed
+    """
+
     command: str
     user: User
     _result: Future | None = field(default=None, repr=False)
     error: str | None = field(default=None)
 
     def __init__(self, command: str, user: User, require_result: bool = True) -> None:
+        """Initialize an RCONCommand instance, with or without a Future for the result.
+
+        Args:
+            command: The RCON command string to be sent to the server
+            user: The User who issued the command
+            require_result: Whether to create a Future for the command result
+        """
         self.command = command
         self.user = user
         if require_result:
