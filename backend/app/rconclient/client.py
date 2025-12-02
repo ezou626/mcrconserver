@@ -2,6 +2,17 @@
 RCON client for Minecraft server
 
 Since all modules are singletons, we get a natural shared client across the app.
+
+Usage:
+
+    from app.rconclient import queue_command, RCONCommand
+
+    rcon_command = RCONCommand(command="list", user=current_user, require_result=True)
+    result = queue_command(rcon_command)
+
+    if result.queued:
+        command_result = await rcon_command.get_command_result()
+        print("RCON Command Result:", command_result)
 """
 
 from asyncio.queues import QueueShutDown
@@ -11,8 +22,8 @@ from .worker import get_queue
 from .command import RCONCommand
 from .types import QueueCommandResult
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 
 def queue_command(command: RCONCommand) -> QueueCommandResult:
@@ -27,7 +38,7 @@ def queue_command(command: RCONCommand) -> QueueCommandResult:
         A QueueCommandResult object for that command.
     """
 
-    LOG.debug("Queueing command: %s", command)
+    LOGGER.debug("Queueing command: %s", command)
     queue = get_queue()
 
     result = QueueCommandResult(
@@ -39,12 +50,12 @@ def queue_command(command: RCONCommand) -> QueueCommandResult:
         queue.put_nowait(command)
         return result
     except QueueShutDown:
-        LOG.error("Queue terminated unexpectedly")
+        LOGGER.error("Queue terminated unexpectedly")
         result.queued = False
         result.error = "Queue terminated unexpectedly"
         return result
     except Exception as e:
-        LOG.error("Failed to queue command: %s", e)
+        LOGGER.error("Failed to queue command: %s", e)
         result.queued = False
         result.error = str(e)
         return result
