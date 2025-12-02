@@ -19,16 +19,23 @@ _connection_event = asyncio.Event()
 
 
 def get_queue() -> asyncio.Queue:
+    """Get the shared RCON command queue.
+
+    Returns:
+        The shared asyncio.Queue instance for RCON commands.
+    """
     return _queue
 
 
 def shutdown_worker() -> None:
+    """Signal the worker to shut down."""
     global _running
     _running = False
-    _queue.put_nowait(None)
+    _queue.put_nowait(None)  # sentinel
 
 
 def get_connection_event() -> asyncio.Event:
+    """Get the connection event that signals when the worker is connected."""
     return _connection_event
 
 
@@ -39,6 +46,13 @@ async def worker(rcon_password: str, timeout: int | None) -> None:
     This function runs until the app exits, processing commands as they are added to the queue.
 
     No retries are performed for failed commands; errors are set on the command's Future.
+
+    Args:
+        rcon_password: The RCON password to authenticate with.
+        timeout: Optional timeout for RCON operations.
+
+    Returns:
+        None
     """
     while _running:
         try:
