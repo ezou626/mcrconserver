@@ -18,6 +18,7 @@ def get_queue() -> asyncio.Queue:
 def shutdown_worker() -> None:
     global _running
     _running = False
+    _queue.put_nowait(None)
 
 
 async def worker() -> None:
@@ -34,6 +35,11 @@ async def worker() -> None:
 
     while _running:
         next_command: RCONCommand = await _queue.get()
+
+        if next_command is None:
+            LOGGER.debug("Worker received shutdown signal")
+            break
+
         LOGGER.debug("Worker got command: %s", next_command)
 
         try:
