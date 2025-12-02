@@ -1,85 +1,72 @@
 """
 Dead-simple RCON packet creation, parsing, and socket management.
 
-Single-threaded, single-coroutine access only.
+Single-threaded && single-coroutine access only (async worker, for example).
 
-Lifecycle: connect() -> _send_packet() -> disconnect()
-
-Disconnect is implicit when the program exits.
+Lifecycle:
+1. connect
+2. _send_packet/send_command or set_timeout
+3. disconnect
 """
 
 import logging
-import os
 import socket
 import struct
 
 from .errors import (
     RCONClientAuthenticationFailed,
-    RCONClientMissingPassword,
     RCONClientNotAuthenticated,
     RCONClientNotConnected,
     RCONClientTimeout,
 )
 from .types import RCONPacketType
 
-logging.basicConfig(level=logging.DEBUG)
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
 PACKET_METADATA_SIZE = 10
 
 rcon_socket = None
-socket_timeout: int | None = None
-
 authenticated = False
-
 request_id = 1
 
 
-def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
+def _format_packet(payload: str, packet_type: RCONPacketType) -> bytes:
     """
-    Synchronously sends a packet to the RCON server and returns the response body as a string.
+    Formats a packet to be sent to the RCON server following https://minecraft.wiki/w/RCON#Packet_format
 
     Args:
         payload: The body of the packet to send.
         packet_type: The type of the packet to send (RCONPacketType).
 
     Returns:
-        The body of the response packet as a string.
-
-    Raises:
-        RCONClientNotConnected: if the client is not connected.
-        RCONClientNotAuthenticated: if the client is not authenticated and the packet type is not AUTH_PACKET.
-        RCONClientAuthenticationFailed: if authentication fails.
+        The formatted packet as bytes.
     """
-    global rcon_socket
-    if rcon_socket is None:
-        raise RCONClientNotConnected("Not connected")
-
-    if not authenticated and packet_type != RCONPacketType.AUTH_PACKET:
-        raise RCONClientNotAuthenticated("Not authenticated")
-
-    global request_id
-
-    LOG.debug("Request ID: %d", request_id)
-    LOG.debug("Packet type: %s", packet_type.name)
-    if packet_type == RCONPacketType.COMMAND_PACKET:
-        LOG.debug("Payload: %s", payload)
-
     body_bytes = payload.encode("utf-8")
 
     packet = (
-        struct.pack("<i", len(body_bytes) + PACKET_METADATA_SIZE)  # length
-        + struct.pack("<i", request_id)  # request_id
-        + struct.pack("<i", packet_type.value)  # type
-        + body_bytes  # body
-        + b"\x00\x00"  # two null bytes
+        struct.pack("<i", len(body_bytes) + PACKET_METADATA_SIZE)
+        + struct.pack("<i", request_id)
+        + struct.pack("<i", packet_type.value)
+        + body_bytes
+        + b"\x00\x00"
     )
 
-    request_id += 1
+    return packet
 
-    # synchronous send and receive
-    rcon_socket.sendall(packet)
+
+def _read_response() -> tuple[int, int, str]:
+    """Reads a response packet from the RCON server.
+
+    Returns:
+        A tuple of (response_id, response_type, response_body).
+
+    Raises:
+        RCONClientNotConnected: if the client is not connected.
+        RCONClientTimeout: if the socket times out.
+    """
+    if rcon_socket is None:
+        raise RCONClientNotConnected("Not connected")
 
     # get the length
     all_bytes = bytearray()
@@ -100,26 +87,64 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
             raise RCONClientTimeout("Connection timed out")
     response_bytes = bytes(all_bytes)
 
-    response_request_id: int = struct.unpack("<i", response_bytes[0:4])[0]
+    response_id: int = struct.unpack("<i", response_bytes[0:4])[0]
     response_type: int = struct.unpack("<i", response_bytes[4:8])[0]
-    response_body: str = response_bytes[8:-2].decode(
-        "utf-8"
-    )  # Exclude the two null bytes at the end
+    response_body: str = response_bytes[8:-2].decode("utf-8")
 
-    if response_request_id == -1:
+    return response_id, response_type, response_body
+
+
+def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
+    """
+    Synchronously sends a packet to the RCON server and returns the response body as a string.
+
+    Args:
+        payload: The body of the packet to send.
+        packet_type: The type of the packet to send (RCONPacketType).
+
+    Returns:
+        The body of the response packet as a string.
+
+    Raises:
+        RCONClientNotConnected: if the socket does not exist.
+        RCONClientNotAuthenticated: if the client is not authenticated and the packet type is not AUTH_PACKET.
+        RCONClientTimeout: if the socket times out.
+        RCONClientAuthenticationFailed: if authentication fails.
+    """
+    global rcon_socket
+    if rcon_socket is None:
+        raise RCONClientNotConnected("Not connected")
+
+    if not authenticated and packet_type != RCONPacketType.AUTH_PACKET:
+        raise RCONClientNotAuthenticated("Not authenticated")
+
+    global request_id
+
+    LOG.debug("Request ID: %d", request_id)
+    LOG.debug("Packet type: %s", packet_type.name)
+    if packet_type == RCONPacketType.COMMAND_PACKET:
+        LOG.debug("Payload: %s", payload)
+
+    request_id += 1
+
+    # synchronous send and receive
+    rcon_socket.sendall(_format_packet(payload, packet_type))
+    response_id, response_type, response_body = _read_response()
+
+    if response_id == -1:
         raise RCONClientAuthenticationFailed("Authentication failed")
 
-    LOG.debug("Response ID: %d", response_request_id)
-    LOG.debug("Response type: %d", response_type)
-    LOG.debug("Response body: %s", response_body)
+    LOG.debug(
+        "Response: ID=%d, type=%d, body=%s", response_id, response_type, response_body
+    )
 
     return response_body
 
 
 def connect(
-    host: str = "localhost",
+    password: str,
     port: int = 25575,
-    password: str | None = None,
+    host: str = "localhost",
     timeout: int | None = None,
 ) -> None:
     """
@@ -132,82 +157,39 @@ def connect(
         timeout: Optional timeout in seconds for the socket connection. Defaults to no timeout.
 
     Raises:
-        RCONClientMissingPassword: if the password is not set.
+        ConnectionRefusedError: if the connection is refused.
+        RCONClientTimeout: if the connection times out.
         RCONClientAuthenticationFailed: if authentication fails.
+        OSError: if an OS error occurs during connection.
+
+    Note:
+        Should never raise RCONClientNotConnected since it establishes the socket.
     """
     global rcon_socket
     if rcon_socket is not None:
         return
 
-    # tcp socket to localhost:port with 2 second timeout
     rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    rcon_socket.settimeout(timeout)
-    global socket_timeout
-    socket_timeout = timeout
-    rcon_socket.connect((host, port))
-
-    # authenticate
-    if password is None:
-        password = os.getenv("RCON_PASSWORD")
-        if password is None:
-            raise RCONClientMissingPassword(
-                "RCON_PASSWORD environment variable is not set"
-            )
+    try:
+        rcon_socket.connect((host, port))
+        rcon_socket.settimeout(timeout)
+    except ConnectionRefusedError:
+        rcon_socket = None
+        LOG.error("Connection refused to RCON server at %s:%d", host, port)
+        raise
+    except TimeoutError as e:
+        rcon_socket = None
+        LOG.error("Connection to RCON server at %s:%d timed out", host, port)
+        raise RCONClientTimeout("Connection timed out") from e
+    except OSError as e:
+        rcon_socket = None
+        LOG.error("OS error when connecting to RCON server at %s:%d: %s", host, port, e)
+        raise
 
     _send_packet(password, RCONPacketType.AUTH_PACKET)
     global authenticated
     authenticated = True
     LOG.debug("RCON client authenticated")
-
-
-def set_timeout(timeout: int | None) -> None:
-    """
-    Sets the timeout for the RCON socket.
-
-    Args:
-        timeout: Timeout in seconds. If None, no timeout is set.
-
-    Raises:
-        RCONClientNotConnected: if the client is not connected.
-    """
-    global rcon_socket
-    if rcon_socket is None:
-        raise RCONClientNotConnected("Not connected")
-
-    rcon_socket.settimeout(timeout)
-    global socket_timeout
-    socket_timeout = timeout
-
-
-def reconnect() -> None:
-    """
-    Reconnects to the RCON server if the connection was lost.
-
-    Useful for recovering from timeouts or connection loss.
-
-    Raises:
-        RCONClientMissingPassword: if the password is not set.
-        RCONClientAuthenticationFailed: if authentication fails.
-    """
-    global rcon_socket, authenticated
-
-    # Store current socket timeout before closing
-    if rcon_socket is not None:
-        try:
-            rcon_socket.close()
-        except Exception:
-            pass  # Ignore errors when closing the socket
-
-    rcon_socket = None
-    authenticated = False
-
-    # Reconnect with the same timeout
-    connect(timeout=socket_timeout)
-
-    LOG.debug("RCON client reconnected successfully")
-
-    global request_id
-    request_id = 1
 
 
 def send_command(command: str) -> str:
@@ -219,15 +201,18 @@ def send_command(command: str) -> str:
 
     Returns:
         The body of the response packet as a string.
+
+    Raises:
+        RCONClientNotConnected: if the client is not connected.
+        RCONClientNotAuthenticated: if the client is not authenticated.
+        RCONClientTimeout: if the socket times out.
     """
     return _send_packet(command, RCONPacketType.COMMAND_PACKET)
 
 
 def disconnect() -> None:
-    """
-    Disconnects from the RCON server and closes the socket.
-    """
-    global rcon_socket, authenticated
+    """Disconnects from the RCON server and closes the socket (best effort)."""
+    global rcon_socket, authenticated, request_id
 
     if rcon_socket is not None:
         try:
@@ -237,5 +222,6 @@ def disconnect() -> None:
 
     rcon_socket = None
     authenticated = False
+    request_id = 1
 
     LOG.debug("RCON client disconnected")

@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+import os
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,31 +15,40 @@ from .rconclient import worker, shutdown_worker
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-LOG.info("API is starting up")
 
-load_dotenv()
 initialize_user_table()
 initialize_keys_table()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    LOG.info("App is starting up")
-    task = asyncio.create_task(worker())
+    LOG.info("Minecraft RCON Server API is starting")
+
+    logging_level = os.getenv("LOGGING_LEVEL")
+    logging.basicConfig(level=logging_level)
+
+    password = os.getenv("RCON_PASSWORD")
+    timeout_str = os.getenv("RCON_TIMEOUT")
+    timeout = int(timeout_str) if timeout_str is not None else None
+
+    if not password:
+        raise RuntimeError("Startup aborted: RCON_PASSWORD must be set")
+
+    task = asyncio.create_task(worker(rcon_password=password, timeout=timeout))
 
     yield
 
-    LOG.info("App is shutting down")
+    LOG.info("Minecraft RCON Server API is shutting down")
     shutdown_worker()
     await task
 
 
-app = FastAPI(title="Minecraft RCON Server", version="0.0.1", lifespan=lifespan)
+app = FastAPI(title="Minecraft RCON Server API", version="0.0.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,  # No credentials needed with JWT bearer tokens
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -47,7 +56,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello World!"}
+    return "Minecraft RCON Server API"
 
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])

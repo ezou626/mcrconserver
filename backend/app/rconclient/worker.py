@@ -2,7 +2,13 @@ import asyncio
 import logging
 
 from .command import RCONCommand
-from .packet import connect, reconnect, send_command, disconnect
+from .packet import connect, send_command, disconnect
+from .errors import (
+    RCONClientTimeout,
+    RCONClientNotConnected,
+    RCONClientNotAuthenticated,
+    RCONClientAuthenticationFailed,
+)
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -21,7 +27,7 @@ def shutdown_worker() -> None:
     _queue.put_nowait(None)
 
 
-async def worker() -> None:
+async def worker(rcon_password: str, timeout: int | None) -> None:
     """
     Asynchronous worker that processes RCON commands from a queue using our RCON client
 
@@ -29,7 +35,7 @@ async def worker() -> None:
 
     No retries are performed for failed commands; errors are set on the command's Future.
     """
-    connect()
+    connect(password=rcon_password, timeout=timeout)
 
     while _running:
         next_command: RCONCommand = await _queue.get()
@@ -45,13 +51,18 @@ async def worker() -> None:
             response = await asyncio.to_thread(send_command, next_command.command)
             LOGGER.debug("Worker got response: %s", response)
             next_command.set_command_result(response)
-        except Exception as e:
-            LOGGER.error("Worker encountered an error: %s", e)
+        except (
+            RCONClientTimeout,
+            RCONClientNotAuthenticated,
+            RCONClientNotConnected,
+        ) as e:  # only catch our known RCON client errors
+            LOGGER.error("RCON client error: %s", e)
             next_command.set_command_error(e)
             try:
-                reconnect()
-            except Exception as re:
-                LOGGER.error("Worker failed to reconnect: %s", re)
+                disconnect()
+                connect(password=rcon_password, timeout=timeout)
+            except (RCONClientAuthenticationFailed, RCONClientTimeout) as re:
+                LOGGER.error("Worker failed to reauthenticate after error: %s", re)
         finally:
             _queue.task_done()
 
