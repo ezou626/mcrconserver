@@ -21,12 +21,20 @@ class RCONCommand:
         self.error = None
 
     def set_command_result(self, result: str) -> None:
-        """Set the result on the associated Future if one is present."""
+        """Set the result on the associated Future if one is present.
+
+        Args:
+            result: The result of the command from the Minecraft server.
+        """
         if self._result is not None and not self._result.done():
             self._result.set_result(result)
 
     def set_command_error(self, error: Exception) -> None:
-        """Set an error on the associated Future if one is present."""
+        """Set an error on the associated Future if one is present.
+
+        Args:
+            error: The exception that occurred while processing the command.
+        """
         self.error = str(error)
         if self._result is not None and not self._result.done():
             self._result.set_exception(Exception(str(error)))
