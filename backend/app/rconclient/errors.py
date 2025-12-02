@@ -1,18 +1,18 @@
 class RCONClientMissingPassword(Exception):
-    pass
+    pass  # Password not in OS environment variables
 
 
 class RCONClientNotConnected(Exception):
-    pass
+    pass  # TCP socket is None
 
 
 class RCONClientAuthenticationFailed(Exception):
-    pass
+    pass  # Authentication with RCON server failed/incorrect password
 
 
 class RCONClientTimeout(Exception):
-    pass
+    pass  # Socket operation timed out
 
 
 class RCONClientNotAuthenticated(Exception):
-    pass
+    pass  # Client is not authenticated with the RCON server
