@@ -3,7 +3,7 @@ Dead-simple RCON packet creation, parsing, and socket management.
 
 Single-threaded, single-coroutine access only.
 
-Lifecycle: connect() -> _send_packet()
+Lifecycle: connect() -> _send_packet() -> disconnect()
 
 Disconnect is implicit when the program exits.
 """
@@ -221,3 +221,21 @@ def send_command(command: str) -> str:
         The body of the response packet as a string.
     """
     return _send_packet(command, RCONPacketType.COMMAND_PACKET)
+
+
+def disconnect() -> None:
+    """
+    Disconnects from the RCON server and closes the socket.
+    """
+    global rcon_socket, authenticated
+
+    if rcon_socket is not None:
+        try:
+            rcon_socket.close()
+        except Exception:
+            pass  # Ignore errors when closing the socket
+
+    rcon_socket = None
+    authenticated = False
+
+    LOG.debug("RCON client disconnected")

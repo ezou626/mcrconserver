@@ -11,7 +11,7 @@ from .auth import (
     router as auth_router,
 )
 from .router import router as api_router
-from .rconclient import worker
+from .rconclient import worker, shutdown_worker
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     finally:
         LOG.info("App is shutting down")
         # Cancel background task on shutdown
-        task.cancel()
+        shutdown_worker()
         try:
             await task
         except asyncio.CancelledError:

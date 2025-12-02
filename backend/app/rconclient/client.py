@@ -8,7 +8,7 @@ import asyncio
 from asyncio.queues import QueueShutDown
 import logging
 
-from .worker import queue
+from .worker import get_queue
 from .command import RCONCommand
 from .types import QueueCommandResult
 from ..auth.user import User
@@ -32,6 +32,7 @@ async def queue_command(command: str, user: User) -> QueueCommandResult:
     LOG.debug("Queueing command: %s by %s", command, user.username)
     future = asyncio.get_running_loop().create_future()
     task = RCONCommand(command, user, future)
+    queue = get_queue()
 
     try:
         queue.put_nowait(task)

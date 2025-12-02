@@ -1,12 +1,23 @@
 import asyncio
 import logging
 
-from .packet import connect, reconnect, send_command
+from .command import RCONCommand
+from .packet import connect, reconnect, send_command, disconnect
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
-queue: asyncio.Queue = asyncio.Queue()
+_queue: asyncio.Queue = asyncio.Queue()
+_running = True
+
+
+def get_queue() -> asyncio.Queue:
+    return _queue
+
+
+def shutdown_worker() -> None:
+    global _running
+    _running = False
 
 
 async def worker() -> None:
@@ -21,25 +32,23 @@ async def worker() -> None:
     """
     connect()
 
-    while True:
-        next_command = await queue.get()
-        LOG.debug("Worker got command: %s", next_command)
+    while _running:
+        next_command: RCONCommand = await _queue.get()
+        LOGGER.debug("Worker got command: %s", next_command)
 
         try:
-            # send_command is synchronous; consider offloading to a thread if it blocks
+            # send_command is synchronous, run in thread for interactivity
             response = await asyncio.to_thread(send_command, next_command.command)
-            LOG.debug("Worker got response: %s", response)
+            LOGGER.debug("Worker got response: %s", response)
             next_command.set_command_result(response)
         except Exception as e:
-            LOG.error("Worker encountered an error: %s", e)
-            # Propagate the error to the awaiting caller
-            try:
-                next_command.future.set_exception(e)
-            except Exception:
-                pass
+            LOGGER.error("Worker encountered an error: %s", e)
+            next_command.set_command_error(e)
             try:
                 reconnect()
             except Exception as re:
-                LOG.error("Worker failed to reconnect: %s", re)
+                LOGGER.error("Worker failed to reconnect: %s", re)
         finally:
-            queue.task_done()
+            _queue.task_done()
+
+    disconnect()
