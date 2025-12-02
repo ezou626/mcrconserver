@@ -21,8 +21,8 @@ from .errors import (
 )
 from .types import RCONPacketType
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 PACKET_METADATA_SIZE = 10
 
@@ -120,10 +120,10 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
 
     global request_id
 
-    LOG.debug("Request ID: %d", request_id)
-    LOG.debug("Packet type: %s", packet_type.name)
+    LOGGER.debug("Request ID: %d", request_id)
+    LOGGER.debug("Packet type: %s", packet_type.name)
     if packet_type == RCONPacketType.COMMAND_PACKET:
-        LOG.debug("Payload: %s", payload)
+        LOGGER.debug("Payload: %s", payload)
 
     request_id += 1
 
@@ -134,7 +134,7 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
     if response_id == -1:
         raise RCONClientAuthenticationFailed("Authentication failed")
 
-    LOG.debug(
+    LOGGER.debug(
         "Response: ID=%d, type=%d, body=%s", response_id, response_type, response_body
     )
 
@@ -178,17 +178,19 @@ def connect(
         raise
     except TimeoutError as e:
         rcon_socket = None
-        LOG.error("Connection to RCON server at %s:%d timed out", host, port)
+        LOGGER.error("Connection to RCON server at %s:%d timed out", host, port)
         raise RCONClientTimeout("Connection timed out") from e
     except OSError as e:
         rcon_socket = None
-        LOG.error("OS error when connecting to RCON server at %s:%d: %s", host, port, e)
+        LOGGER.error(
+            "OS error when connecting to RCON server at %s:%d: %s", host, port, e
+        )
         raise
 
     _send_packet(password, RCONPacketType.AUTH_PACKET)
     global authenticated
     authenticated = True
-    LOG.debug("RCON client authenticated")
+    LOGGER.debug("RCON client authenticated")
 
 
 def send_command(command: str) -> str:
@@ -223,4 +225,4 @@ def disconnect() -> None:
     authenticated = False
     request_id = 1
 
-    LOG.debug("RCON client disconnected")
+    LOGGER.debug("RCON client disconnected")
