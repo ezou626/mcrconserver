@@ -1,12 +1,18 @@
 """
 Dead-simple RCON packet creation, parsing, and socket management.
 
-Single-threaded && single-coroutine access only (async worker, for example).
+Single-threaded && single-coroutine access only. Intended for use
+within an asyncio worker for sequencing and delivering commands/results.
 
-Lifecycle:
-1. connect
-2. _send_packet/send_command or set_timeout
-3. disconnect
+All functions are synchronous/blocking. Run in a separate thread
+executor for better interactivity.
+
+Usage:
+password = ...
+timeout = ...
+connect(password=password, timeout=timeout)
+send_command()
+disconnect()
 """
 
 import logging
