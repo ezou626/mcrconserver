@@ -1,16 +1,23 @@
 from asyncio import Future
+from dataclasses import dataclass, field
+
 from ..auth.user import User
 
 
+@dataclass
 class RCONCommand:
-    def __init__(self, command: str, user: User, future: Future | None = None):
-        self.command = command
-        self.user = user
-        self.future = future
+    command: str
+    user: User
+    future: Future | None = field(default=None, repr=False)
 
-    def __repr__(self):
-        return f"RCONCommand(command={self.command}, user={self.user.username}, future={self.future})"
+    def __repr__(self) -> str:
+        return (
+            f"RCONCommand(command={self.command!r}, "
+            f"user={self.user.username!r}, "
+            f"future_set={self.future is not None})"
+        )
 
-    def set_command_result(self, command_result: str) -> None:
-        if self.future:
-            self.future.set_result(command_result)
+    def set_command_result(self, result: str) -> None:
+        """Set the result on the associated Future if one is present."""
+        if self.future is not None and not self.future.done():
+            self.future.set_result(result)
