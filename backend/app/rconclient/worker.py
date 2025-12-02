@@ -35,7 +35,12 @@ async def worker(rcon_password: str, timeout: int | None) -> None:
 
     No retries are performed for failed commands; errors are set on the command's Future.
     """
-    connect(password=rcon_password, timeout=timeout)
+    while True:
+        try:
+            connect(password=rcon_password, timeout=timeout)
+            break
+        except ConnectionRefusedError:  # maybe we haven't started the server yet
+            await asyncio.sleep(5)
 
     while _running:
         next_command: RCONCommand = await _queue.get()
