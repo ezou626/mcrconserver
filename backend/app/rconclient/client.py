@@ -35,12 +35,6 @@ async def queue_command(
     future = asyncio.get_running_loop().create_future()
     task = RCONCommand(command, user, future)
 
-    if queue.full():
-        return {
-            "processed": False,
-            "message": "Server is busy. Please try again later.",
-        }
-
     try:
         queue.put_nowait(task)
         if not require_result:
