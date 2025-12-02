@@ -15,6 +15,7 @@ LOGGER.setLevel(logging.DEBUG)
 
 _queue: asyncio.Queue = asyncio.Queue()
 _running = True
+_connection_event = asyncio.Event()
 
 
 def get_queue() -> asyncio.Queue:
@@ -27,6 +28,10 @@ def shutdown_worker() -> None:
     _queue.put_nowait(None)
 
 
+def get_connection_event() -> asyncio.Event:
+    return _connection_event
+
+
 async def worker(rcon_password: str, timeout: int | None) -> None:
     """
     Asynchronous worker that processes RCON commands from a queue using our RCON client
@@ -35,11 +40,14 @@ async def worker(rcon_password: str, timeout: int | None) -> None:
 
     No retries are performed for failed commands; errors are set on the command's Future.
     """
-    while True:
+    while _running:
         try:
             connect(password=rcon_password, timeout=timeout)
+            _connection_event.set()
+            LOGGER.info("RCON client connected and authenticated")
             break
         except ConnectionRefusedError:  # maybe we haven't started the server yet
+            LOGGER.warning("Connection refused, retrying in 5 seconds...")
             await asyncio.sleep(5)
 
     while _running:

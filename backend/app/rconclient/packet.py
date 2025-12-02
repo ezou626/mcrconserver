@@ -175,7 +175,6 @@ def connect(
         rcon_socket.settimeout(timeout)
     except ConnectionRefusedError:
         rcon_socket = None
-        LOG.error("Connection refused to RCON server at %s:%d", host, port)
         raise
     except TimeoutError as e:
         rcon_socket = None

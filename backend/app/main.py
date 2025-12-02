@@ -11,7 +11,7 @@ from .auth import (
     router as auth_router,
 )
 from .router import router as api_router
-from .rconclient import worker, shutdown_worker
+from .rconclient import worker, shutdown_worker, get_connection_event
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -35,6 +35,8 @@ async def lifespan(app: FastAPI):
         raise RuntimeError("Startup aborted: RCON_PASSWORD must be set")
 
     task = asyncio.create_task(worker(rcon_password=password, timeout=timeout))
+
+    await get_connection_event().wait()
 
     yield
 
