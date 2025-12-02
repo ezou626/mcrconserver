@@ -1,7 +1,8 @@
+from dataclasses import dataclass
 from .roles import Role
 
 
+@dataclass
 class User:
-    def __init__(self, username: str, role: Role):
-        self.username = username
-        self.role = role
+    username: str
+    role: Role

@@ -9,14 +9,7 @@ class RCONCommand:
     command: str
     user: User
     future: Future | None = field(default=None, repr=False)
-    error: str | None = field(default=None, repr=False)
-
-    def __repr__(self) -> str:
-        return (
-            f"RCONCommand(command={self.command}, "
-            f"user={self.user!r}, "
-            f"future_set={self.future is not None})"
-        )
+    error: str | None = field(default=None)
 
     def set_command_result(self, result: str) -> None:
         """Set the result on the associated Future if one is present."""
@@ -28,3 +21,16 @@ class RCONCommand:
         self.error = str(error)
         if self.future is not None and not self.future.done():
             self.future.set_exception(Exception(str(error)))
+
+    async def get_command_result(self) -> str | None:
+        """Await and get the result from the associated Future if one is present.
+
+        Returns:
+            The result string if available, else None.
+
+        Raises:
+            Exception: If the command resulted in an error.
+        """
+        if self.future is not None:
+            return await self.future
+        return None
