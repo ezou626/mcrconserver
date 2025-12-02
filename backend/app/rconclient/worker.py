@@ -23,13 +23,11 @@ def shutdown_worker() -> None:
 
 async def worker() -> None:
     """
-    Asynchronous worker that processes RCON commands from a queue.
+    Asynchronous worker that processes RCON commands from a queue using our RCON client
 
-    Dotenv is already loaded to ensure environment variables are available.
+    This function runs until the app exits, processing commands as they are added to the queue.
 
-    This function runs indefinitely, processing commands as they are added to the queue.
-
-    Commands have at-most-once delivery semantics; if a command fails due to a timeout, it is not retried.
+    No retries are performed for failed commands; errors are set on the command's Future.
     """
     connect()
 

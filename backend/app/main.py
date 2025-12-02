@@ -26,16 +26,12 @@ initialize_keys_table()
 async def lifespan(app: FastAPI):
     LOG.info("App is starting up")
     task = asyncio.create_task(worker())
-    try:
-        yield
-    finally:
-        LOG.info("App is shutting down")
-        # Cancel background task on shutdown
-        shutdown_worker()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+
+    yield
+
+    LOG.info("App is shutting down")
+    shutdown_worker()
+    await task
 
 
 app = FastAPI(title="Minecraft RCON Server", version="0.0.1", lifespan=lifespan)
