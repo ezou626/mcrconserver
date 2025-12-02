@@ -1,3 +1,8 @@
+"""Defines the RCONCommand class for commands sent to the RCON server.
+
+See class docstring for details.
+"""
+
 from asyncio import Future, get_event_loop
 from dataclasses import dataclass, field
 
