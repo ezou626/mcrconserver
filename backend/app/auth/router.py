@@ -3,18 +3,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
-from .user import User
+from ..common.user import User, Role
 
 from .db_connection import get_db_connection
 from .jwt_auth import jwt_auth
-from .roles import Role
 
-from .account_helpers import (
+from .utils import (
     change_password,
-    check_password,
     create_account,
     delete_account,
 )
+from .queries import AuthQueries
 from .key_helpers import (
     generate_api_key,
     list_api_keys,
@@ -92,7 +91,7 @@ def login(
     username: Annotated[str, Form(...)],
     password: Annotated[str, Form(...)],
 ):
-    user = check_password(username, password)
+    user = AuthQueries.authenticate_user(username, password)
 
     if not user:
         raise HTTPException(

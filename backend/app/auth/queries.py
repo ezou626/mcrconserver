@@ -6,7 +6,7 @@ authentication-related queries.
 
 from bcrypt import checkpw, gensalt, hashpw
 
-from app.auth.user import User, Role
+from backend.app.common.user import User, Role
 from .db_connection import get_db_connection, set_db_path
 from .utils import password_requirements
 
