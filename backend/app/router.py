@@ -4,9 +4,11 @@ This is the core api router, separated from setup of server
 
 from fastapi import APIRouter, Depends
 
-from .auth import validate_api_key, validate_jwt_token, User, Role
+from app.auth import validate_api_key, validate_jwt_token
 
-from .rconclient import queue_command, RCONCommand
+from app.common.user import User, Role
+
+from app.rconclient import queue_command, RCONCommand
 
 router = APIRouter()
 
