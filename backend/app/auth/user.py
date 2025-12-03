@@ -1,3 +1,5 @@
+"""Fundamental user data structure."""
+
 from dataclasses import dataclass
 from .roles import Role
 
