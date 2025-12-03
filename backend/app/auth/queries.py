@@ -215,6 +215,9 @@ class AuthQueries:
         db.commit()
         return cursor.rowcount
 
+    # TODO: Consider combining list_api_keys and list_all_api_keys into one method with optional username parameter
+    # TODO: More ordering and filtering options
+
     @staticmethod
     def list_api_keys(
         user: User, page: int = 1, limit: int = 10

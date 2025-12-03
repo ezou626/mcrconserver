@@ -5,8 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import HTTPException, status
-from .user import User
-from .roles import Role
+from ..common.user import User, Role
+
+# TODO: Move this into the utils file
 
 
 class JWTAuth:
@@ -70,6 +71,7 @@ class JWTAuth:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    # TODO: Refresh token on each use
     def refresh_token(self, token: str) -> str:
         """Create a new token from an existing valid token."""
         user = self.verify_token(token)

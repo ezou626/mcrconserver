@@ -20,6 +20,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 bearer_scheme = HTTPBearer(auto_error=True)
 
 
+# TODO: Move validators to a separate file
 def validate_api_key(api_key: str = Security(api_key_header)) -> User | None:
     """
     Validate the given API key and return the associated User. Allows us to act as an authenticated user.

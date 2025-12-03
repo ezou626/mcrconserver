@@ -31,6 +31,7 @@ def initialize_owner_account() -> tuple[str, str] | None:
     return username, owner_password
 
 
+# TODO: Make the error messages more clear and user-friendly
 def password_requirements(password: str) -> str | None:
     """
     Password requirements logic.
