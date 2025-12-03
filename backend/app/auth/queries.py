@@ -6,9 +6,8 @@ authentication-related queries.
 
 from bcrypt import checkpw, gensalt, hashpw
 
-from app.auth.user import User
-from backend.app.auth.roles import Role
-from .db_connection import get_db_connection
+from app.auth.user import User, Role
+from .db_connection import get_db_connection, set_db_path
 from .utils import password_requirements
 
 
@@ -49,8 +48,9 @@ class AuthQueries:
     """
 
     @staticmethod
-    def create_tables() -> None:
+    def initialize_tables(db_path: str) -> None:
         """Create users and api_keys tables if they do not exist."""
+        set_db_path(db_path)
         db = get_db_connection()
         db.execute(AuthQueries.CREATE_USERS_TABLE)
         db.execute(AuthQueries.CREATE_API_KEYS_TABLE)
