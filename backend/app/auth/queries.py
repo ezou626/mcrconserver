@@ -4,11 +4,18 @@ Using the AuthQueries class as a repository for
 authentication-related queries.
 """
 
+import secrets
+import logging
 from bcrypt import checkpw, gensalt, hashpw
 
-from backend.app.common.user import User, Role
+from app.common.user import User, Role
 from .db_connection import get_db_connection, set_db_path
 from .utils import password_requirements
+
+API_KEY_LENGTH = 128
+
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 
 class AuthQueries:
@@ -97,9 +104,7 @@ class AuthQueries:
         return None
 
     @staticmethod
-    def create_account(
-        username: str, password: str, role: Role
-    ) -> tuple[User | None, str | None]:
+    def create_account(user: User, password: str) -> str | None:
         """
         Create a new user account with the given username, password, and role.
 
@@ -114,22 +119,22 @@ class AuthQueries:
         """
         error = password_requirements(password)
         if error:
-            return None, error
+            return error
 
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(AuthQueries.GET_USERS_WITH_USERNAME, (username,))
+        cursor.execute(AuthQueries.GET_USERS_WITH_USERNAME, (user.username,))
         if cursor.fetchone() is not None:
-            return None, "Username already exists"
+            return "Username already exists"
 
         salt = gensalt()
         hashed_password = hashpw(password.encode(), salt)
         cursor.execute(
             AuthQueries.ADD_USER,
-            (username, hashed_password, salt, role),
+            (user.username, hashed_password, salt, user.role),
         )
         db.commit()
-        return User(username, role), None
+        return None
 
     @staticmethod
     def delete_account(username: str) -> int:
@@ -171,3 +176,91 @@ class AuthQueries:
         )
         db.commit()
         return None
+
+    @staticmethod
+    def generate_api_key(user: User) -> str | None:
+        """
+        Generate a secure API key for the given username.
+
+        Args:
+            user (User): The User object to generate the API key for.
+
+        Returns:
+            str | None: The generated API key, or None if generation failed.
+        """
+        username = user.username
+        api_key = secrets.token_urlsafe(API_KEY_LENGTH)
+
+        try:
+            db = get_db_connection()
+            db.execute(
+                "INSERT INTO api_keys (api_key, username) VALUES (?, ?)",
+                (api_key, username),
+            )
+            db.commit()
+        except Exception as e:
+            LOGGER.error(f"Error generating API key: {e}")
+            return None
+
+        return api_key
+
+    @staticmethod
+    def revoke_api_key(api_key: str):
+        """
+        Revoke the given API key.
+        """
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM api_keys WHERE api_key = ?", (api_key,))
+        db.commit()
+        return cursor.rowcount
+
+    @staticmethod
+    def list_api_keys(
+        user: User, page: int = 1, limit: int = 10
+    ) -> tuple[list[tuple[str, str]], int]:
+        """
+        List API keys for the given username with pagination.
+        Returns tuple of (api_keys, total_count)
+        """
+        username = user.username
+
+        db = get_db_connection()
+        cursor = db.cursor()
+
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM api_keys WHERE username = ?", (username,))
+        total_count = cursor.fetchone()[0]
+
+        # Get paginated results
+        offset = (page - 1) * limit
+        cursor.execute(
+            "SELECT api_key, created_at FROM api_keys WHERE username = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (username, limit, offset),
+        )
+        rows = cursor.fetchall()
+        return [(row[0], row[1]) for row in rows], total_count
+
+    @staticmethod
+    def list_all_api_keys(
+        page: int = 1, limit: int = 10
+    ) -> tuple[list[tuple[str, str, str]], int]:
+        """
+        List all API keys for all users with pagination.
+        Returns tuple of (api_keys, total_count)
+        """
+        db = get_db_connection()
+        cursor = db.cursor()
+
+        # Get total count
+        cursor.execute("SELECT COUNT(*) FROM api_keys")
+        total_count = cursor.fetchone()[0]
+
+        # Get paginated results
+        offset = (page - 1) * limit
+        cursor.execute(
+            "SELECT api_key, username, created_at FROM api_keys ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+        rows = cursor.fetchall()
+        return [(row[0], row[1], row[2]) for row in rows], total_count
