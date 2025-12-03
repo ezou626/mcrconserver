@@ -6,13 +6,11 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 from app.common.user import User, Role
 
 from .db_connection import get_db_connection
-from .jwt_auth import jwt_auth
-
 from .queries import AuthQueries
+from .utils import verify_token, create_access_token
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-LOG.info("Auth router is being imported")
 
 router = APIRouter()
 
@@ -62,7 +60,14 @@ def validate_jwt_token(
     Raises:
         HTTPException with 401 status if the token is invalid.
     """
-    return jwt_auth.verify_token(credentials.credentials)
+    user = verify_token(credentials.credentials)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
 
 
 def validate_role(required_role: Role):
@@ -89,8 +94,7 @@ def login(
             detail="Invalid username or password",
         )
 
-    # Generate JWT token
-    access_token = jwt_auth.create_access_token(user)
+    access_token = create_access_token(user)
 
     return {
         "success": True,
@@ -107,7 +111,7 @@ def refresh_token(user: User = Depends(validate_jwt_token)):
     """
     Refresh the JWT token for authenticated user.
     """
-    access_token = jwt_auth.create_access_token(user)
+    access_token = refresh_token(user)
     return {
         "success": True,
         "access_token": access_token,

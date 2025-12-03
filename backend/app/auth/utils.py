@@ -1,3 +1,8 @@
+"""Password and JWT utility functions.
+
+Includes password requirement checks, JWT token creation and verification.
+"""
+
 import logging
 import getpass
 import os
