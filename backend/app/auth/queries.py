@@ -44,8 +44,16 @@ class AuthQueries:
         """
 
     ADD_USER = """
-    INSERT INTO users (username, hashed_password, salt, role) VALUES (?, ?, ?, ?)
-    """
+        INSERT INTO users (username, hashed_password, salt, role) VALUES (?, ?, ?, ?)
+        """
+
+    UPDATE_USER_PASSWORD = """
+        UPDATE users SET hashed_password = ?, salt = ? WHERE username = ?
+        """
+
+    DELETE_USER = """
+        DELETE FROM users WHERE username = ?;
+        """
 
     @staticmethod
     def initialize_tables(db_path: str) -> None:
@@ -122,3 +130,44 @@ class AuthQueries:
         )
         db.commit()
         return User(username, role), None
+
+    @staticmethod
+    def delete_account(username: str) -> int:
+        """
+        Delete the user account with the given username.
+        """
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
+        db.commit()
+        return cursor.rowcount
+
+    @staticmethod
+    def change_password(username: str, new_password: str) -> str | None:
+        """
+        Change the password for the given username.
+
+        Args:
+            username (str): The username to change the password for.
+            new_password (str): The new password.
+
+        Returns:
+            str | None: An error message if the password change failed, None otherwise.
+        """
+        error = password_requirements(new_password)
+        if error:
+            return error
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute(AuthQueries.GET_USERS_WITH_USERNAME, (username,))
+        if cursor.fetchone() is None:
+            return "Username does not exist"
+
+        salt = gensalt()
+        hashed_password = hashpw(new_password.encode(), salt)
+        cursor.execute(
+            AuthQueries.UPDATE_USER_PASSWORD,
+            (hashed_password, salt, username),
+        )
+        db.commit()
+        return None
