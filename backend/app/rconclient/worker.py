@@ -1,3 +1,17 @@
+"""Worker that processes RCON commands from a shared queue.
+
+Usage:
+# startup
+task = asyncio.create_task(
+    worker(rcon_password=password, timeout=timeout)
+)
+# wait for worker to connect
+await get_connection_event().wait()
+# cleanup
+shutdown_worker()
+await task
+"""
+
 import asyncio
 import logging
 
