@@ -31,22 +31,44 @@ def initialize_owner_account() -> tuple[str, str] | None:
     return username, owner_password
 
 
-# TODO: Make the error messages more clear and user-friendly
+RULES = [
+    (
+        lambda x: not any(c.isupper() for c in x),
+        "at least one uppercase letter",
+    ),
+    (
+        lambda x: not any(c.islower() for c in x),
+        "at least one lowercase letter",
+    ),
+    (lambda x: not any(c.isdigit() for c in x), "at least one digit"),
+    (
+        lambda x: not any(c in SPECIAL_CHARACTERS for c in x),
+        f"at least one special character in {SPECIAL_CHARACTERS}",
+    ),
+]
+
+
 def password_requirements(password: str) -> str | None:
     """
     Password requirements logic.
+
+    Either the password is a passphrase (longer than 20 characters) or it meets the following criteria:
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character from SPECIAL_CHARACTERS
+
+    Args:
+        password: The password to validate.
+
+    Returns:
+        An error message if the password does not meet the requirements, None otherwise.
     """
     if len(password) > 20:  # passphrases are allowed
         return None
-    if not any(c.isupper() for c in password):
-        return "Owner password must contain at least one uppercase letter"
-    if not any(c.islower() for c in password):
-        return "Owner password must contain at least one lowercase letter"
-    if not any(c.isdigit() for c in password):
-        return "Owner password must contain at least one digit"
-    if not any(c in SPECIAL_CHARACTERS for c in password):
-        return (
-            "Owner password must contain at least one special character in "
-            + SPECIAL_CHARACTERS
-        )
+
+    for rule, error_message in RULES:
+        if rule(password):
+            return f"Owner password must be passphrase or contain {error_message}"
+
     return None
