@@ -2,10 +2,9 @@ from datetime import datetime
 import logging
 import getpass
 
-from bcrypt import checkpw, gensalt, hashpw
+from bcrypt import gensalt, hashpw
 
-from .user import User
-from .roles import Role
+from ..common.user import User, Role
 
 from .db_connection import get_db_connection
 
@@ -92,31 +91,6 @@ def password_requirements(password: str) -> str | None:
             "Owner password must contain at least one special character in "
             + SPECIAL_CHARACTERS
         )
-    return None
-
-
-def check_password(username: str, password: str) -> User | None:
-    """
-    Check the password for the given username.
-
-    Args:
-        username (str): The username to check.
-        password (str): The password to check.
-
-    Returns:
-        User | None: The User if the password is correct, None otherwise.
-    """
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute(
-        "SELECT hashed_password, role FROM users WHERE username = ?", (username,)
-    )
-    row = cursor.fetchone()
-    if row is None:
-        return None
-    stored_hashed_password, role = row
-    if checkpw(password.encode(), stored_hashed_password):
-        return User(username, role=Role(int(role)))
     return None
 
 
