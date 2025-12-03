@@ -138,7 +138,7 @@ class AuthQueries:
         """
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
+        cursor.execute(AuthQueries.DELETE_USER, (username,))
         db.commit()
         return cursor.rowcount
 
