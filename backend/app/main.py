@@ -6,18 +6,15 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import initialize_user_table, initialize_keys_table
-from app.auth import (
-    router as auth_router,
-)
+from app.auth import AuthQueries, router as auth_router
 from app.router import router as api_router
 from app.rconclient import worker, shutdown_worker, get_connection_event
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
-initialize_user_table()
-initialize_keys_table()
+DB_PATH = os.getenv("DB_PATH", "database.db")  # sane default
+AuthQueries.initialize_tables(DB_PATH)
 
 
 @asynccontextmanager
