@@ -6,7 +6,7 @@ See class docstring for details.
 from asyncio import Future, get_event_loop
 from dataclasses import dataclass, field
 
-from app.auth.user import User
+from app.common.user import User
 
 
 @dataclass
