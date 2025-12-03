@@ -1,5 +1,11 @@
 import logging
 import getpass
+import os
+import jwt
+
+from datetime import timezone, datetime, timedelta
+
+from app.common.user import Role, User
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -21,6 +27,10 @@ RULES = [
         f"at least one special character in {SPECIAL_CHARACTERS}",
     ),
 ]
+
+JWT_SECRET_KEY = os.urandom(64).hex()
+ALGORITHM = "HS512"
+EXPIRE_TIME = 60 * 24 * 7
 
 
 def initialize_owner_account() -> tuple[str, str] | None:
@@ -71,3 +81,66 @@ def password_requirements(password: str) -> str | None:
             return f"Owner password must be 20+ characters or contain {error_message}"
 
     return None
+
+
+def create_access_token(user: User) -> str:
+    """Create a new JWT access token for the user.
+
+    Args:
+        user: The User object for whom to create the token.
+
+    Returns:
+        A JWT access token as a string."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=EXPIRE_TIME)
+
+    payload = {
+        "sub": user.username,
+        "role": int(user.role),
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "access_token",
+    }
+
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(token: str) -> User | None:
+    """Verify and decode a JWT token, returning the user.
+
+    Args:
+        token: The JWT token string to verify.
+
+    Returns:
+        The User object if the token is valid, None otherwise."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+
+        if payload.get("type") != "access_token":
+            return None
+
+        username: str = payload.get("sub")
+        role_int: int = payload.get("role")
+
+        if username is None or role_int is None:
+            return None
+
+        return User(username=username, role=Role(role_int))
+
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+
+def refresh_token(self, token: str) -> str | None:
+    """Create a new token from an existing valid token.
+
+    Args:
+        token: The existing valid JWT token string.
+
+    Returns:
+        A new JWT access token as a string."""
+    user = verify_token(token)
+    if user is None:
+        return None
+    return create_access_token(user)
