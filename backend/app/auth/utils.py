@@ -6,6 +6,22 @@ LOG.setLevel(logging.DEBUG)
 
 SPECIAL_CHARACTERS = "!@#$%^&*()-_=+[{]}"
 
+RULES = [
+    (
+        lambda x: not any(c.isupper() for c in x),
+        "at least one uppercase letter",
+    ),
+    (
+        lambda x: not any(c.islower() for c in x),
+        "at least one lowercase letter",
+    ),
+    (lambda x: not any(c.isdigit() for c in x), "at least one digit"),
+    (
+        lambda x: not any(c in SPECIAL_CHARACTERS for c in x),
+        f"at least one special character in {SPECIAL_CHARACTERS}",
+    ),
+]
+
 
 def initialize_owner_account() -> tuple[str, str] | None:
     """
@@ -31,23 +47,6 @@ def initialize_owner_account() -> tuple[str, str] | None:
     return username, owner_password
 
 
-RULES = [
-    (
-        lambda x: not any(c.isupper() for c in x),
-        "at least one uppercase letter",
-    ),
-    (
-        lambda x: not any(c.islower() for c in x),
-        "at least one lowercase letter",
-    ),
-    (lambda x: not any(c.isdigit() for c in x), "at least one digit"),
-    (
-        lambda x: not any(c in SPECIAL_CHARACTERS for c in x),
-        f"at least one special character in {SPECIAL_CHARACTERS}",
-    ),
-]
-
-
 def password_requirements(password: str) -> str | None:
     """
     Password requirements logic.
@@ -69,6 +68,6 @@ def password_requirements(password: str) -> str | None:
 
     for rule, error_message in RULES:
         if rule(password):
-            return f"Owner password must be passphrase or contain {error_message}"
+            return f"Owner password must be 20+ characters or contain {error_message}"
 
     return None
