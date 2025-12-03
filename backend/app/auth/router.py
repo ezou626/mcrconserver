@@ -3,23 +3,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
-from ..common.user import User, Role
+from app.common.user import User, Role
 
 from .db_connection import get_db_connection
 from .jwt_auth import jwt_auth
 
-from .utils import (
-    change_password,
-    create_account,
-    delete_account,
-)
 from .queries import AuthQueries
-from .key_helpers import (
-    generate_api_key,
-    list_api_keys,
-    list_all_api_keys,
-    revoke_api_key,
-)
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -154,8 +143,9 @@ def create_account_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot create account with same name as own",
         )
-    new_user = create_account(username, password, role)
-    if not new_user:
+    new_user = User(username, role=role)
+    error = AuthQueries.create_account(new_user, password)
+    if error:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create account",
@@ -181,7 +171,7 @@ def delete_account_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete own account",
         )
-    if not delete_account(username):
+    if not AuthQueries.delete_account(username):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to delete account",
@@ -194,7 +184,7 @@ def change_password_route(
     new_password: Annotated[str, Form(...)],
     user: User = Depends(validate_jwt_token),
 ):
-    result = change_password(user.username, new_password)
+    result = AuthQueries.change_password(user.username, new_password)
 
     if result:
         raise HTTPException(
@@ -206,7 +196,7 @@ def change_password_route(
 
 @router.put("/api-key")
 def create_api_key_route(user=Depends(validate_role(Role.ADMIN))):
-    api_key = generate_api_key(user.username)
+    api_key = AuthQueries.generate_api_key(user)
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -230,7 +220,7 @@ def list_api_keys_route(
             detail="Limit must be between 1 and 100",
         )
 
-    api_keys, total_count = list_api_keys(user.username, page, limit)
+    api_keys, total_count = AuthQueries.list_api_keys(user, page, limit)
     total_pages = (total_count + limit - 1) // limit  # Ceiling division
 
     return {
@@ -264,7 +254,7 @@ def list_all_api_keys_route(
             detail="Limit must be between 1 and 100",
         )
 
-    api_keys, total_count = list_all_api_keys(page, limit)
+    api_keys, total_count = AuthQueries.list_all_api_keys(page, limit)
     total_pages = (total_count + limit - 1) // limit  # Ceiling division
 
     return {
@@ -289,7 +279,7 @@ def revoke_api_key_route(
     api_key: Annotated[str, Form(...)],
     user=Depends(validate_role(Role.ADMIN)),
 ):
-    if not revoke_api_key(api_key):
+    if not AuthQueries.revoke_api_key(api_key):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to revoke API key",
