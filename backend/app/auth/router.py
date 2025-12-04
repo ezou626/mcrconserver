@@ -39,19 +39,6 @@ def login(
     }
 
 
-@router.post("/refresh")
-def refresh_token(user: User = Depends(validate_jwt_token)):
-    """
-    Refresh the JWT token for authenticated user.
-    """
-    access_token = refresh_token(user)
-    return {
-        "success": True,
-        "access_token": access_token,
-        "token_type": "bearer",
-    }
-
-
 @router.post("/logout")
 def logout():
     """
