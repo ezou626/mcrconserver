@@ -85,10 +85,8 @@ class QueueCommandResult:
 
     Attributes:
         command: The RCONCommand that was queued.
-        queued: Whether the command was successfully queued.
         error: An optional error message if queuing failed.
     """
 
     command: RCONCommand
-    queued: bool
     error: str | None = None

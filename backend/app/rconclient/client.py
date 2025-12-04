@@ -40,21 +40,16 @@ def queue_command(command: RCONCommand) -> QueueCommandResult:
     LOGGER.debug("Queueing command: %s", command)
     queue = get_queue()
 
-    result = QueueCommandResult(
-        command=command,
-        queued=True,
-    )
+    result = QueueCommandResult(command)
 
     try:
         queue.put_nowait(command)
         return result
     except QueueShutDown:
         LOGGER.error("Queue terminated unexpectedly")
-        result.queued = False
         result.error = "Queue terminated unexpectedly"
         return result
     except Exception as e:
         LOGGER.error("Failed to queue command: %s", e)
-        result.queued = False
         result.error = str(e)
         return result
