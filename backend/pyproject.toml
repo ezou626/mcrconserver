@@ -12,3 +12,8 @@ dependencies = [
     "ruff>=0.14.0",
     "starlette[full]>=0.48.0",
 ]
+
+[dependency-groups]
+dev = [
+    "sphinx>=9.0.4",
+]
