@@ -26,13 +26,11 @@ class RCONCommand:
         command: The RCON command string to be sent to the server
         user: The User who issued the command
         _result: An optional Future to hold the result of the command
-        error: An optional error message if the command failed
     """
 
     command: str
     user: User
     _result: Future | None = field(default=None, repr=False)
-    error: str | None = field(default=None)
 
     def __init__(self, command: str, user: User, require_result: bool = True) -> None:
         """Initialize an RCONCommand instance, with or without a Future for the result.
@@ -48,7 +46,6 @@ class RCONCommand:
             self._result = get_event_loop().create_future()
         else:
             self._result = None
-        self.error = None
 
     def set_command_result(self, result: str) -> None:
         """Set the result on the associated Future if one is present.
@@ -65,15 +62,14 @@ class RCONCommand:
         Args:
             error: The exception that occurred while processing the command.
         """
-        self.error = str(error)
         if self._result is not None and not self._result.done():
-            self._result.set_exception(Exception(str(error)))
+            self._result.set_exception(error)
 
     async def get_command_result(self) -> str | None:
         """Await and get the result from the associated Future if one is present.
 
         Returns:
-            The result string if available, else None.
+            The result string if a Future exists, else None.
 
         Raises:
             Exception: If the command resulted in an error.
