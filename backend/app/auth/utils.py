@@ -135,17 +135,3 @@ def verify_token(token: str) -> User | None:
         return None
     except jwt.InvalidTokenError:
         return None
-
-
-def refresh_token(self, token: str) -> str | None:
-    """Create a new token from an existing valid token.
-
-    Args:
-        token: The existing valid JWT token string.
-
-    Returns:
-        A new JWT access token as a string."""
-    user = verify_token(token)
-    if user is None:
-        return None
-    return create_access_token(user)
