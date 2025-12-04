@@ -19,12 +19,6 @@ class RCONClientAuthenticationFailed(Exception):
     pass
 
 
-class RCONClientTimeout(Exception):
-    """Raised when a socket operation times out."""
-
-    pass
-
-
 class RCONClientNotAuthenticated(Exception):
     """Raised when the client is not authenticated with the RCON server."""
 

@@ -21,7 +21,6 @@ from .errors import (
     RCONClientAuthenticationFailed,
     RCONClientNotAuthenticated,
     RCONClientNotConnected,
-    RCONClientTimeout,
 )
 from .types import RCONPacketType
 
@@ -67,7 +66,7 @@ def _read_response() -> tuple[int, int, str]:
 
     Raises:
         RCONClientNotConnected: if the client is not connected.
-        RCONClientTimeout: if the socket times out.
+        TimeoutError: if the socket times out.
     """
     if rcon_socket is None:
         raise RCONClientNotConnected("Not connected")
@@ -75,20 +74,14 @@ def _read_response() -> tuple[int, int, str]:
     # get the length
     all_bytes = bytearray()
     while len(all_bytes) < 4:
-        try:
-            all_bytes += rcon_socket.recv(4 - len(all_bytes))
-        except socket.timeout:
-            raise RCONClientTimeout("Connection timed out")
+        all_bytes += rcon_socket.recv(4 - len(all_bytes))
     response_bytes = bytes(all_bytes)
     response_length: int = struct.unpack("<i", response_bytes)[0]
 
-    # Get the rest of the response
+    # rest of response
     all_bytes = bytearray()
     while len(all_bytes) < response_length:
-        try:
-            all_bytes += rcon_socket.recv(response_length - len(all_bytes))
-        except socket.timeout:
-            raise RCONClientTimeout("Connection timed out")
+        all_bytes += rcon_socket.recv(response_length - len(all_bytes))
     response_bytes = bytes(all_bytes)
 
     response_id: int = struct.unpack("<i", response_bytes[0:4])[0]
@@ -112,7 +105,7 @@ def _send_packet(payload: str, packet_type: RCONPacketType) -> str:
     Raises:
         RCONClientNotConnected: if the socket does not exist.
         RCONClientNotAuthenticated: if the client is not authenticated and the packet type is not AUTH_PACKET.
-        RCONClientTimeout: if the socket times out.
+        TimeoutError: if the socket times out.
         RCONClientAuthenticationFailed: if authentication fails.
     """
     global rcon_socket
@@ -180,10 +173,15 @@ def connect(
     except ConnectionRefusedError:
         rcon_socket = None
         raise
-    except TimeoutError as e:
+    except TimeoutError:
         rcon_socket = None
-        LOGGER.error("Connection to RCON server at %s:%d timed out", "localhost", port)
-        raise RCONClientTimeout("Connection timed out") from e
+        LOGGER.error(
+            "Connection to RCON server at %s:%d timed out with timeout %s",
+            "localhost",
+            port,
+            timeout,
+        )
+        raise
     except OSError as e:
         rcon_socket = None
         LOGGER.error(
@@ -210,7 +208,7 @@ def send_command(command: str) -> str:
     Raises:
         RCONClientNotConnected: if the client is not connected.
         RCONClientNotAuthenticated: if the client is not authenticated.
-        RCONClientTimeout: if the socket times out.
+        TimeoutError: if the socket times out.
     """
     return _send_packet(command, RCONPacketType.COMMAND_PACKET)
 
