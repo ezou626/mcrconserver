@@ -19,7 +19,6 @@ async def command(
     user: User = Depends(validate_jwt_token),
     require_result: bool = True,
 ):
-    # Check if user has required permissions
     if not user.role.check_permission(Role.ADMIN):
         raise HTTPException(status_code=403, detail="Forbidden")
 
