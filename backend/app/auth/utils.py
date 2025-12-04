@@ -35,7 +35,7 @@ RULES = [
 
 JWT_SECRET_KEY = os.urandom(64).hex()
 ALGORITHM = "HS512"
-EXPIRE_TIME = 60 * 24 * 7
+EXPIRE_TIME = 60 * 24
 
 
 def initialize_owner_account() -> tuple[str, str] | None:
