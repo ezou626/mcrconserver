@@ -1,12 +1,20 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Body, Depends, Form, HTTPException, status
 from app.common.user import User, Role
 
 from .queries import AuthQueries
 from .utils import create_access_token
 from .validators import validate_jwt_token, validate_role, validate_api_key
+from .models import (
+    PaginationInfo,
+    ApiKeyInfo,
+    ApiKeyWithUser,
+    LoginResponse,
+    AccountInfo,
+    MessageResponse,
+)
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -14,11 +22,21 @@ LOG.setLevel(logging.DEBUG)
 router = APIRouter()
 
 
-@router.post("/login")
-def login(
-    username: Annotated[str, Form(...)],
-    password: Annotated[str, Form(...)],
-):
+def _create_pagination_info(page: int, limit: int, total_count: int) -> PaginationInfo:
+    """Helper function to create pagination info"""
+    total_pages = (total_count + limit - 1) // limit
+    return PaginationInfo(
+        page=page,
+        limit=limit,
+        total_count=total_count,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_prev=page > 1,
+    )
+
+
+@router.post("/login", response_model=LoginResponse)
+def login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
     user = AuthQueries.authenticate_user(username, password)
 
     if not user:
@@ -29,34 +47,29 @@ def login(
 
     access_token = create_access_token(user)
 
-    return {
-        "success": True,
-        "message": "Login successful",
-        "access_token": access_token,
-        "token_type": "bearer",
-        "username": user.username,
-        "role": int(user.role),
-    }
+    return LoginResponse(
+        access_token=access_token, username=user.username, role=int(user.role)
+    )
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=MessageResponse)
 def logout():
     """
     Logout endpoint. With JWT, logout is handled client-side by discarding the token.
     """
-    return {"success": True, "message": "Logout successful"}
+    return MessageResponse(message="Logout successful")
 
 
-@router.get("/account")
+@router.get("/account", response_model=AccountInfo)
 def get_account_info(user: User = Depends(validate_jwt_token)):
-    return {"success": True, "username": user.username, "role": int(user.role)}
+    return AccountInfo(username=user.username, role=int(user.role))
 
 
 @router.put("/account")
 def create_account_route(
-    username: Annotated[str, Form(...)],
-    password: Annotated[str, Form(...)],
-    role: Annotated[Role, Form(...)],
+    username: Annotated[str, Form()],
+    password: Annotated[str, Form()],
+    role: Annotated[int, Form()],
     owner: User = Depends(validate_role(Role.OWNER)),
 ):
     """
@@ -68,22 +81,17 @@ def create_account_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot create account with same name as own",
         )
-    new_user = User(username, role=role)
+    new_user = User(username, role=Role(role))
     error = AuthQueries.create_account(new_user, password)
     if error:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create account",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error,
         )
-    return {
-        "success": True,
-        "message": "Account created successfully",
-        "username": new_user.username,
-        "role": new_user.role,
-    }
+    return AccountInfo(username=new_user.username, role=int(new_user.role))
 
 
-@router.delete("/account")
+@router.delete("/account", response_model=MessageResponse)
 def delete_account_route(
     username: Annotated[str, Form(...)],
     owner=Depends(validate_role(Role.OWNER)),
@@ -101,10 +109,10 @@ def delete_account_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to delete account",
         )
-    return {"success": True, "message": "Account deleted successfully"}
+    return MessageResponse(message="Account deleted successfully")
 
 
-@router.patch("/account/password")
+@router.patch("/account/password", response_model=MessageResponse)
 def change_password_route(
     new_password: Annotated[str, Form(...)],
     user: User = Depends(validate_jwt_token),
@@ -116,7 +124,7 @@ def change_password_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result,
         )
-    return {"success": True, "message": "Password changed successfully"}
+    return MessageResponse(message="Password changed successfully")
 
 
 @router.put("/api-key")
@@ -127,7 +135,7 @@ def create_api_key_route(user=Depends(validate_role(Role.ADMIN))):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to create API key",
         )
-    return {"success": True, "api_key": api_key}
+    return {"api_key": api_key}
 
 
 @router.get("/api-key")
@@ -145,23 +153,16 @@ def list_api_keys_route(
             detail="Limit must be between 1 and 100",
         )
 
-    api_keys, total_count = AuthQueries.list_api_keys(user, page, limit)
-    total_pages = (total_count + limit - 1) // limit  # Ceiling division
+    api_keys, total_count = AuthQueries.list_api_keys(
+        username=user.username, page=page, limit=limit
+    )
+    pagination = _create_pagination_info(page, limit, total_count)
 
-    return {
-        "success": True,
-        "api_keys": [
-            {"api_key": key, "created_at": created_at} for key, created_at in api_keys
-        ],
-        "pagination": {
-            "page": page,
-            "limit": limit,
-            "total_count": total_count,
-            "total_pages": total_pages,
-            "has_next": page < total_pages,
-            "has_prev": page > 1,
-        },
-    }
+    data = [
+        ApiKeyInfo(api_key=key, created_at=created_at) for key, created_at in api_keys
+    ]
+
+    return {"api_keys": data, "pagination": pagination}
 
 
 @router.get("/api-key/all")
@@ -180,28 +181,19 @@ def list_all_api_keys_route(
         )
 
     api_keys, total_count = AuthQueries.list_api_keys(page=page, limit=limit)
-    total_pages = (total_count + limit - 1) // limit  # Ceiling division
+    pagination = _create_pagination_info(page, limit, total_count)
 
-    return {
-        "success": True,
-        "api_keys": [
-            {"api_key": key, "username": username, "created_at": created_at}
-            for key, username, created_at in api_keys
-        ],
-        "pagination": {
-            "page": page,
-            "limit": limit,
-            "total_count": total_count,
-            "total_pages": total_pages,
-            "has_next": page < total_pages,
-            "has_prev": page > 1,
-        },
-    }
+    data = [
+        ApiKeyWithUser(api_key=key, username=username, created_at=created_at)
+        for key, username, created_at in api_keys
+    ]
+
+    return {"api_keys": data, "pagination": pagination}
 
 
-@router.delete("/api-key")
+@router.delete("/api-key", response_model=MessageResponse)
 def revoke_api_key_route(
-    api_key: Annotated[str, Form(...)],
+    api_key: str = Body(...),
     user=Depends(validate_role(Role.ADMIN)),
 ):
     if not AuthQueries.revoke_api_key(api_key):
@@ -209,10 +201,10 @@ def revoke_api_key_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to revoke API key",
         )
-    return {"success": True, "message": "API key revoked successfully"}
+    return MessageResponse(message="API key revoked successfully")
 
 
-@router.post("/api-key/validate")
+@router.post("/api-key/validate", response_model=MessageResponse)
 def validate_api_key_route(
     api_key: str = Depends(validate_api_key),
     user=Depends(validate_role(Role.ADMIN)),
@@ -222,4 +214,4 @@ def validate_api_key_route(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid API key",
         )
-    return {"success": True, "message": "API key is valid"}
+    return MessageResponse(message="API key is valid")
