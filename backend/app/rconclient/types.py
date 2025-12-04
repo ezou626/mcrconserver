@@ -26,6 +26,11 @@ class RCONCommand:
         command: The RCON command string to be sent to the server
         user: The User who issued the command
         _result: An optional Future to hold the result of the command
+
+    If _result is None, the command is treated as "fire and forget".
+    It is the caller's responsibility to not await get_command_result in
+    that case, and exception propagation is undefined behavior, though
+    this implementation will not propagate exceptions in that scenario.
     """
 
     command: str
