@@ -2,7 +2,7 @@
 This is the core api router, separated from setup of server
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth import validate_api_key, validate_jwt_token
 
@@ -21,8 +21,6 @@ async def command(
 ):
     # Check if user has required permissions
     if not user.role.check_permission(Role.ADMIN):
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=403, detail="Forbidden")
 
     rcon_command = RCONCommand(
@@ -32,12 +30,13 @@ async def command(
     result = queue_command(rcon_command)
 
     if not result.queued:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=500, detail="Failed to queue command")
 
     if require_result:
-        command_result = await rcon_command.get_command_result()
+        try:
+            command_result = await rcon_command.get_command_result()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
         return command_result
 
     return "Command queued successfully"
@@ -54,12 +53,13 @@ async def command_with_api_key(
     result = queue_command(rcon_command)
 
     if not result.queued:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=500, detail="Failed to queue command")
 
     if require_result:
-        command_result = await rcon_command.get_command_result()
+        try:
+            command_result = await rcon_command.get_command_result()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
         return command_result
 
     return "Command queued successfully"
