@@ -68,7 +68,11 @@ class AuthQueries:
 
     @staticmethod
     def initialize_tables(db_path: str) -> None:
-        """Create users and api_keys tables if they do not exist."""
+        """Create users and api_keys tables if they do not exist.
+
+        Args:
+            db_path (str): Path to the SQLite database file.
+        """
         set_db_path(db_path)
         db = get_db_connection()
         db.execute(AuthQueries.CREATE_USERS_TABLE)
