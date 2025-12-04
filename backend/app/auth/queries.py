@@ -148,6 +148,9 @@ class AuthQueries:
     def delete_account(username: str) -> int:
         """
         Delete the user account with the given username.
+
+        Args:
+            username (str): The username of the account to delete.
         """
         db = get_db_connection()
         cursor = db.cursor()
