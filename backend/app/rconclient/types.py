@@ -8,7 +8,7 @@ from app.common.user import User
 
 
 class RCONPacketType(IntEnum):
-    """Straight from https://minecraft.wiki/w/RCON#Packets"""
+    """Types for an RCON TCP packet defined in https://minecraft.wiki/w/RCON#Packets"""
 
     ERROR_PACKET = -1
     MULTI_PACKET = 0
@@ -81,7 +81,6 @@ class RCONCommand:
         if self._result is not None:
             return await self._result
         return None
-
 
 
 @dataclass
