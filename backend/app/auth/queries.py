@@ -75,9 +75,14 @@ class AuthQueries:
         """
         set_db_path(db_path)
         db = get_db_connection()
-        db.execute(AuthQueries.CREATE_USERS_TABLE)
-        db.execute(AuthQueries.CREATE_API_KEYS_TABLE)
-        db.commit()
+        try:
+            db.execute(AuthQueries.CREATE_USERS_TABLE)
+            db.execute(AuthQueries.CREATE_API_KEYS_TABLE)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            LOGGER.error(f"Error initializing tables: {e}")
+            raise
 
     @staticmethod
     def count_users() -> int:
@@ -131,18 +136,23 @@ class AuthQueries:
 
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (user.username,))
-        if cursor.fetchone() is not None:
-            return "Username already exists"
+        try:
+            cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (user.username,))
+            if cursor.fetchone() is not None:
+                return "Username already exists"
 
-        salt = gensalt()
-        hashed_password = hashpw(password.encode(), salt)
-        cursor.execute(
-            AuthQueries.ADD_USER,
-            (user.username, hashed_password, salt, user.role),
-        )
-        db.commit()
-        return None
+            salt = gensalt()
+            hashed_password = hashpw(password.encode(), salt)
+            cursor.execute(
+                AuthQueries.ADD_USER,
+                (user.username, hashed_password, salt, user.role),
+            )
+            db.commit()
+            return None
+        except Exception as e:
+            db.rollback()
+            LOGGER.error(f"Error creating account for {user.username}: {e}")
+            return "Failed to create account"
 
     @staticmethod
     def delete_account(username: str) -> int:
@@ -154,9 +164,14 @@ class AuthQueries:
         """
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(AuthQueries.DELETE_USER, (username,))
-        db.commit()
-        return cursor.rowcount
+        try:
+            cursor.execute(AuthQueries.DELETE_USER, (username,))
+            db.commit()
+            return cursor.rowcount
+        except Exception as e:
+            db.rollback()
+            LOGGER.error(f"Error deleting account {username}: {e}")
+            return 0
 
     @staticmethod
     def change_password(username: str, new_password: str) -> str | None:
@@ -173,20 +188,26 @@ class AuthQueries:
         error = password_requirements(new_password)
         if error:
             return error
+
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (username,))
-        if cursor.fetchone() is None:
-            return "Username does not exist"
+        try:
+            cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (username,))
+            if cursor.fetchone() is None:
+                return "Username does not exist"
 
-        salt = gensalt()
-        hashed_password = hashpw(new_password.encode(), salt)
-        cursor.execute(
-            AuthQueries.UPDATE_USER_PASSWORD,
-            (hashed_password, salt, username),
-        )
-        db.commit()
-        return None
+            salt = gensalt()
+            hashed_password = hashpw(new_password.encode(), salt)
+            cursor.execute(
+                AuthQueries.UPDATE_USER_PASSWORD,
+                (hashed_password, salt, username),
+            )
+            db.commit()
+            return None
+        except Exception as e:
+            db.rollback()
+            LOGGER.error(f"Error changing password for {username}: {e}")
+            return "Failed to change password"
 
     @staticmethod
     def generate_api_key(user: User) -> str | None:
@@ -202,18 +223,18 @@ class AuthQueries:
         username = user.username
         api_key = secrets.token_urlsafe(API_KEY_LENGTH)
 
+        db = get_db_connection()
         try:
-            db = get_db_connection()
             db.execute(
                 "INSERT INTO api_keys (api_key, username) VALUES (?, ?)",
                 (api_key, username),
             )
             db.commit()
+            return api_key
         except Exception as e:
-            LOGGER.error(f"Error generating API key: {e}")
+            db.rollback()
+            LOGGER.error(f"Error generating API key for {username}: {e}")
             return None
-
-        return api_key
 
     @staticmethod
     def revoke_api_key(api_key: str):
@@ -222,9 +243,14 @@ class AuthQueries:
         """
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute("DELETE FROM api_keys WHERE api_key = ?", (api_key,))
-        db.commit()
-        return cursor.rowcount
+        try:
+            cursor.execute("DELETE FROM api_keys WHERE api_key = ?", (api_key,))
+            db.commit()
+            return cursor.rowcount
+        except Exception as e:
+            db.rollback()
+            LOGGER.error(f"Error revoking API key: {e}")
+            return 0
 
     # TODO: Consider combining list_api_keys and list_all_api_keys into one method with optional username parameter
     # TODO: More ordering and filtering options
