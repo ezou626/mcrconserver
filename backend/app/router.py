@@ -28,17 +28,20 @@ async def command(
 
     result = queue_command(rcon_command)
 
-    if not result.queued:
-        raise HTTPException(status_code=500, detail="Failed to queue command")
+    if result.error:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to queue command: {result.error}"
+        )
 
-    if require_result:
-        try:
-            command_result = await rcon_command.get_command_result()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
-        return command_result
+    if not require_result:
+        return "Command queued successfully"
 
-    return "Command queued successfully"
+    try:
+        command_result = await rcon_command.get_command_result()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
+
+    return command_result
 
 
 @router.post("/key/command")
@@ -51,14 +54,17 @@ async def command_with_api_key(
 
     result = queue_command(rcon_command)
 
-    if not result.queued:
-        raise HTTPException(status_code=500, detail="Failed to queue command")
+    if result.error:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to queue command: {result.error}"
+        )
 
-    if require_result:
-        try:
-            command_result = await rcon_command.get_command_result()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
-        return command_result
+    if not require_result:
+        return "Command queued successfully"
 
-    return "Command queued successfully"
+    try:
+        command_result = await rcon_command.get_command_result()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
+
+    return command_result
