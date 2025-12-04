@@ -46,8 +46,12 @@ class AuthQueries:
         SELECT hashed_password, role FROM users WHERE username = ?;
         """
 
-    GET_USERS_WITH_USERNAME = """
+    GET_USER_WITH_USERNAME = """
         SELECT role FROM users WHERE username = ?
+        """
+
+    GET_USER_BY_API_KEY = """
+        SELECT username FROM api_keys WHERE api_key = ?
         """
 
     ADD_USER = """
@@ -123,7 +127,7 @@ class AuthQueries:
 
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(AuthQueries.GET_USERS_WITH_USERNAME, (user.username,))
+        cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (user.username,))
         if cursor.fetchone() is not None:
             return "Username already exists"
 
@@ -164,7 +168,7 @@ class AuthQueries:
             return error
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(AuthQueries.GET_USERS_WITH_USERNAME, (username,))
+        cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (username,))
         if cursor.fetchone() is None:
             return "Username does not exist"
 
@@ -267,3 +271,29 @@ class AuthQueries:
         )
         rows = cursor.fetchall()
         return [(row[0], row[1], row[2]) for row in rows], total_count
+
+    @staticmethod
+    def get_user_by_api_key(api_key: str) -> User | None:
+        """
+        Get user by API key.
+
+        Args:
+            api_key (str): The API key to look up.
+
+        Returns:
+            User | None: The User object if API key is valid, None otherwise.
+        """
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute(AuthQueries.GET_USER_BY_API_KEY, (api_key,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        username = row[0]
+        cursor.execute(AuthQueries.GET_USER_WITH_USERNAME, (username,))
+        role_row = cursor.fetchone()
+        if not role_row:
+            return None
+
+        return User(username, role=Role(int(role_row[0])))

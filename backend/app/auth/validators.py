@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 
 from app.common.user import User, Role
-from .db_connection import get_db_connection
+from .queries import AuthQueries
 
 from .utils import verify_token
 
@@ -17,29 +17,12 @@ def validate_api_key(api_key: str = Security(api_key_header)) -> User | None:
     Raises:
         HTTPException with 401 status if the API key is invalid.
     """
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute(
-        "SELECT username FROM api_keys WHERE api_key = ?",
-        (api_key,),
-    )
-    row = cursor.fetchone()
-    if not row:
+    user = AuthQueries.get_user_by_api_key(api_key)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )
-
-    cursor.execute(
-        "SELECT role FROM users WHERE username = ?",
-        (row[0],),
-    )
-    role_row = cursor.fetchone()
-    if not role_row:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
-        )
-
-    return User(row[0], role=Role(int(role_row[0])))
+    return user
 
 
 def validate_jwt_token(
