@@ -19,8 +19,7 @@ from asyncio.queues import QueueShutDown
 import logging
 
 from .worker import get_queue
-from .command import RCONCommand
-from .types import QueueCommandResult
+from .types import RCONCommand, QueueCommandResult
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)

@@ -15,7 +15,7 @@ await task
 import asyncio
 import logging
 
-from .command import RCONCommand
+from .types import RCONCommand
 from .packet import connect, send_command, disconnect
 from .errors import (
     RCONClientTimeout,

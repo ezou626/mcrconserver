@@ -1,5 +1,5 @@
 from .client import queue_command
-from .command import RCONCommand
+from .types import RCONCommand, QueueCommandResult
 from .worker import shutdown_worker, worker, get_connection_event
 
 __all__ = [
@@ -8,4 +8,5 @@ __all__ = [
     "get_connection_event",
     "queue_command",
     "RCONCommand",
+    "QueueCommandResult",
 ]
