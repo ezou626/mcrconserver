@@ -22,19 +22,6 @@ LOG.setLevel(logging.DEBUG)
 router = APIRouter()
 
 
-def _create_pagination_info(page: int, limit: int, total_count: int) -> PaginationInfo:
-    """Helper function to create pagination info"""
-    total_pages = (total_count + limit - 1) // limit
-    return PaginationInfo(
-        page=page,
-        limit=limit,
-        total_count=total_count,
-        total_pages=total_pages,
-        has_next=page < total_pages,
-        has_prev=page > 1,
-    )
-
-
 @router.post("/login", response_model=LoginResponse)
 def login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
     user = AuthQueries.authenticate_user(username, password)
@@ -156,7 +143,7 @@ def list_api_keys_route(
     api_keys, total_count = AuthQueries.list_api_keys(
         username=user.username, page=page, limit=limit
     )
-    pagination = _create_pagination_info(page, limit, total_count)
+    pagination = PaginationInfo.from_query_params(page, limit, total_count)
 
     data = [
         ApiKeyInfo(api_key=key, created_at=created_at) for key, created_at in api_keys
@@ -181,7 +168,7 @@ def list_all_api_keys_route(
         )
 
     api_keys, total_count = AuthQueries.list_api_keys(page=page, limit=limit)
-    pagination = _create_pagination_info(page, limit, total_count)
+    pagination = PaginationInfo.from_query_params(page, limit, total_count)
 
     data = [
         ApiKeyWithUser(api_key=key, username=username, created_at=created_at)
