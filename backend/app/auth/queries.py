@@ -252,58 +252,83 @@ class AuthQueries:
             LOGGER.error(f"Error revoking API key: {e}")
             return 0
 
-    # TODO: Consider combining list_api_keys and list_all_api_keys into one method with optional username parameter
-    # TODO: More ordering and filtering options
-
     @staticmethod
     def list_api_keys(
-        user: User, page: int = 1, limit: int = 10
-    ) -> tuple[list[tuple[str, str]], int]:
+        username: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+        order_by: str = "created_at",
+        order_desc: bool = True,
+        created_after: str | None = None,
+        created_before: str | None = None,
+    ) -> tuple[list[tuple], int]:
         """
-        List API keys for the given username with pagination.
-        Returns tuple of (api_keys, total_count)
-        """
-        username = user.username
+        List API keys with optional filtering and pagination.
 
-        db = get_db_connection()
-        cursor = db.cursor()
+        Args:
+            username (str, optional): Filter by specific username. If None, returns all API keys.
+            page (int): Page number for pagination (1-based).
+            limit (int): Number of results per page.
+            order_by (str): Field to order by ('created_at', 'username', 'api_key').
+            order_desc (bool): Whether to order in descending order.
+            created_after (str, optional): Filter API keys created after this date (ISO format).
+            created_before (str, optional): Filter API keys created before this date (ISO format).
 
-        # Get total count
-        cursor.execute("SELECT COUNT(*) FROM api_keys WHERE username = ?", (username,))
-        total_count = cursor.fetchone()[0]
-
-        # Get paginated results
-        offset = (page - 1) * limit
-        cursor.execute(
-            "SELECT api_key, created_at FROM api_keys WHERE username = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (username, limit, offset),
-        )
-        rows = cursor.fetchall()
-        return [(row[0], row[1]) for row in rows], total_count
-
-    @staticmethod
-    def list_all_api_keys(
-        page: int = 1, limit: int = 10
-    ) -> tuple[list[tuple[str, str, str]], int]:
-        """
-        List all API keys for all users with pagination.
-        Returns tuple of (api_keys, total_count)
+        Returns:
+            tuple: (api_keys, total_count) where api_keys is list of tuples.
+                  If username is provided: [(api_key, created_at), ...]
+                  If username is None: [(api_key, username, created_at), ...]
         """
         db = get_db_connection()
         cursor = db.cursor()
 
+        # Build WHERE clause
+        where_conditions = []
+        params = []
+
+        if username is not None:
+            where_conditions.append("username = ?")
+            params.append(username)
+
+        if created_after is not None:
+            where_conditions.append("created_at > ?")
+            params.append(created_after)
+
+        if created_before is not None:
+            where_conditions.append("created_at < ?")
+            params.append(created_before)
+
+        where_clause = (
+            " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        )
+
+        # Validate order_by field
+        valid_order_fields = {"created_at", "username", "api_key"}
+        if order_by not in valid_order_fields:
+            order_by = "created_at"
+
+        order_direction = "DESC" if order_desc else "ASC"
+
         # Get total count
-        cursor.execute("SELECT COUNT(*) FROM api_keys")
+        count_query = f"SELECT COUNT(*) FROM api_keys{where_clause}"
+        cursor.execute(count_query, params)
         total_count = cursor.fetchone()[0]
 
         # Get paginated results
         offset = (page - 1) * limit
-        cursor.execute(
-            "SELECT api_key, username, created_at FROM api_keys ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (limit, offset),
-        )
+
+        if username is not None:
+            # Return format: (api_key, created_at)
+            select_fields = "api_key, created_at"
+        else:
+            # Return format: (api_key, username, created_at)
+            select_fields = "api_key, username, created_at"
+
+        query = f"SELECT {select_fields} FROM api_keys{where_clause} ORDER BY {order_by} {order_direction} LIMIT ? OFFSET ?"
+        cursor.execute(query, params + [limit, offset])
         rows = cursor.fetchall()
-        return [(row[0], row[1], row[2]) for row in rows], total_count
+
+        return [tuple(row) for row in rows], total_count
 
     @staticmethod
     def get_user_by_api_key(api_key: str) -> User | None:

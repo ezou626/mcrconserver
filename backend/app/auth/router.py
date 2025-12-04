@@ -179,7 +179,7 @@ def list_all_api_keys_route(
             detail="Limit must be between 1 and 100",
         )
 
-    api_keys, total_count = AuthQueries.list_all_api_keys(page, limit)
+    api_keys, total_count = AuthQueries.list_api_keys(page=page, limit=limit)
     total_pages = (total_count + limit - 1) // limit  # Ceiling division
 
     return {
