@@ -20,12 +20,14 @@ class RCONPacketType(IntEnum):
     :cvar MULTI_PACKET: Used for multi-packet responses
     :cvar COMMAND_PACKET: Standard command packet
     :cvar AUTH_PACKET: Authentication packet
+    :cvar DUMMY_PACKET: Dummy packet used for multi-packet responses
     """
 
     ERROR_PACKET = -1
     MULTI_PACKET = 0
     COMMAND_PACKET = 2
     AUTH_PACKET = 3
+    DUMMY_PACKET = 200
 
 
 @dataclass(frozen=True)
