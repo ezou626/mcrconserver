@@ -153,13 +153,13 @@ class SocketClient:
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
-        if self.request_id == -1:
-            raise
-        self.request_id += 1
+        if self._request_id == -1:
+            raise ConnectionError("Client is disconnected")
+        self._request_id += 1
         return await SocketClient._send_packet(
             command,
             RCONPacketType.COMMAND_PACKET,
-            self.request_id,
+            self._request_id,
             self._reader,
             self._writer,
         )
