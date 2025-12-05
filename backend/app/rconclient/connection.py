@@ -7,7 +7,6 @@ socket exceptions for handling reconnects/retries, and return null results
 for authentication failures.
 
 Packet format reference: https://minecraft.wiki/w/RCON#Packet_format
-
 """
 
 from __future__ import annotations
