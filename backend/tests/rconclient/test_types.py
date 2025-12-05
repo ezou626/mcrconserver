@@ -1,3 +1,10 @@
+"""
+Unit tests for the RCON client types module.
+
+This module contains comprehensive tests for the :class:`~app.rconclient.types.RCONCommand`
+class, including dependency management, topological sorting, and error handling.
+"""
+
 import unittest
 import asyncio
 
@@ -6,19 +13,37 @@ from app.common.user import User, Role
 
 
 class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
+    """
+    Test suite for the :class:`app.rconclient.types.RCONCommand` class.
+
+    :cvar user: Test user fixture with admin role
+    :cvar loop: Asyncio event loop for test isolation
+    """
+
     def setUp(self):
-        """Set up test fixtures"""
+        """
+        Set up test fixtures and environment.
+
+        Creates a test user with admin privileges and initializes a new
+        asyncio event loop for test isolation.
+        """
         self.user = User("testuser", role=Role.ADMIN)
 
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
 
     def tearDown(self):
-        """Tear down test fixtures"""
+        """
+        Clean up test environment.
+
+        Properly closes the asyncio event loop to prevent resource leaks.
+        """
         self.loop.close()
 
     async def test_rcon_command_creation_with_result(self):
-        """Test RCONCommand creation with result future"""
+        """
+        Test RCONCommand creation with result future.
+        """
         command = RCONCommand.create("list", self.user, require_result=True)
         command.set_command_result("Player count: 5")
 
@@ -27,7 +52,9 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await command.get_command_result(), "Player count: 5")
 
     async def test_set_command_error_with_future(self):
-        """Test setting command error when future exists"""
+        """
+        Test setting command error when future exists and is awaited.
+        """
         command = RCONCommand.create("list", self.user, require_result=True)
         error = Exception("THIS IS A TEST EXCEPTION")
 
@@ -37,7 +64,9 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
             await command.get_command_result()
 
     async def test_add_dependency(self):
-        """Test adding a dependency to an RCONCommand"""
+        """
+        Test adding a dependency to an RCONCommand.
+        """
         command1 = RCONCommand.create("list", self.user, require_result=True)
         command2 = RCONCommand.create("say Hello", self.user, require_result=True)
         command2.add_dependency(command1)
@@ -45,7 +74,10 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertIn(command1, command2.dependencies)
 
     async def test_topological_sort_simple(self):
-        """Test topological sorting of two RCON commands"""
+        """
+        Verifies that a simple dependency chain
+        is correctly sorted with dependencies appearing first.
+        """
         command1 = RCONCommand.create(
             "list", self.user, command_id=1, require_result=True
         )
@@ -58,7 +90,10 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted_commands, [command1, command2])
 
     async def test_topological_sort_cycle(self):
-        """Test topological sorting with a cycle in dependencies"""
+        """
+        Ensures that circular dependencies are properly detected
+        and result in a :exc:`ValueError` being raised.
+        """
         command1 = RCONCommand.create(
             "list", self.user, command_id=1, require_result=True
         )
@@ -72,7 +107,9 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
             RCONCommand.topological_sort([command1, command2])
 
     async def test_topological_sort_duplicate_ids(self):
-        """Test topological sorting with duplicate command IDs"""
+        """
+        Verifies that duplicate command IDs are detected
+        """
         command1 = RCONCommand.create(
             "list", self.user, command_id=1, require_result=True
         )
@@ -84,15 +121,19 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(sorted_commands)
 
     async def test_topological_sort_large_graph(self):
-        """Test topological sorting with a large, complex dependency graph"""
+        """
+        Test topological sorting with a large, complex dependency graph.
+        """
 
-        commands = {}
+        commands: list[RCONCommand] = []
         for i in range(1, 11):
-            commands[i] = RCONCommand.create(
-                f"command{i}", self.user, command_id=i, require_result=True
+            commands.append(
+                RCONCommand.create(
+                    f"command{i}", self.user, command_id=i, require_result=True
+                )
             )
 
-        # Set up dependencies (dependency_id, dependent_id)
+        # (dependency, dependent)
         dependencies = [
             (1, 3),
             (1, 4),
@@ -110,14 +151,13 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         ]
 
         for dep_id, cmd_id in dependencies:
-            commands[cmd_id].add_dependency(commands[dep_id])
+            commands[cmd_id - 1].add_dependency(commands[dep_id - 1])
 
-        command_list = list(commands.values())
+        command_list = list(commands)
         sorted_commands = RCONCommand.topological_sort(command_list)
 
+        # raw assert for Ruff
         assert sorted_commands is not None
-
-        self.assertIsNotNone(sorted_commands)
         self.assertEqual(len(sorted_commands), 10)
 
         position = {cmd.command_id: i for i, cmd in enumerate(sorted_commands)}
@@ -138,12 +178,16 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_topological_sort_complex_cycle_detection(self):
-        """Test cycle detection in a larger graph with multiple potential cycles"""
+        """
+        Test cycle detection in a larger graph with multiple potential cycles.
+        """
 
-        commands = {}
+        commands: list[RCONCommand] = []
         for i in range(1, 11):
-            commands[i] = RCONCommand.create(
-                f"command{i}", self.user, command_id=i, require_result=True
+            commands.append(
+                RCONCommand.create(
+                    f"command{i}", self.user, command_id=i, require_result=True
+                )
             )
 
         dependencies = [
@@ -161,20 +205,24 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         ]
 
         for dep_id, cmd_id in dependencies:
-            commands[cmd_id].add_dependency(commands[dep_id])
+            commands[cmd_id - 1].add_dependency(commands[dep_id - 1])
 
         with self.assertRaises(ValueError) as context:
-            RCONCommand.topological_sort(list(commands.values()))
+            RCONCommand.topological_sort(commands)
 
         self.assertIn("Cycle detected", str(context.exception))
 
     async def test_topological_sort_disconnected_components(self):
-        """Test topological sorting with disconnected components"""
+        """
+        Test topological sorting with disconnected components.
+        """
 
-        commands = {}
+        commands: list[RCONCommand] = []
         for i in range(1, 7):
-            commands[i] = RCONCommand.create(
-                f"command{i}", self.user, command_id=i, require_result=True
+            commands.append(
+                RCONCommand.create(
+                    f"command{i}", self.user, command_id=i, require_result=True
+                )
             )
 
         dependencies = [
@@ -184,10 +232,11 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         ]
 
         for dep_id, cmd_id in dependencies:
-            commands[cmd_id].add_dependency(commands[dep_id])
+            commands[cmd_id - 1].add_dependency(commands[dep_id - 1])
 
-        sorted_commands = RCONCommand.topological_sort(list(commands.values()))
+        sorted_commands = RCONCommand.topological_sort(commands)
 
+        # raw assert for Ruff
         assert sorted_commands is not None
         self.assertEqual(len(sorted_commands), 6)
 
