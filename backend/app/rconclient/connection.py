@@ -4,7 +4,9 @@ RCON communication client.
 Intended for use within an asyncio task worker for delivering commands
 and receiving results asynchronously. The philosophy is to bubble up
 socket exceptions for handling reconnects/retries, and return null results
-for authentication failures.
+for authentication failures. Because we consider mainly long-lived connections,
+we don't support the async context manager pattern here, but instead in the
+wrapping resource Worker.
 
 Packet format reference: https://minecraft.wiki/w/RCON#Packet_format
 """
@@ -92,18 +94,11 @@ class SocketClient:
         """
 
         # get the length
-        all_bytes = bytearray()
-        while len(all_bytes) < 4:
-            all_bytes += await reader.read(4 - len(all_bytes))
-        response_bytes = bytes(all_bytes)
+        response_bytes = await reader.readexactly(4)
         response_length: int = struct.unpack("<i", response_bytes)[0]
 
         # rest of response
-        all_bytes = bytearray()
-        while len(all_bytes) < response_length:
-            all_bytes += await reader.read(response_length - len(all_bytes))
-        response_bytes = bytes(all_bytes)
-
+        response_bytes = await reader.readexactly(response_length)
         response_id: int = struct.unpack("<i", response_bytes[0:4])[0]
         response_body = response_bytes[8:-2].decode("utf-8")
 
