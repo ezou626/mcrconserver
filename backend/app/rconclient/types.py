@@ -22,17 +22,24 @@ class RCONPacketType(IntEnum):
 @dataclass(frozen=True)
 class RCONCommand:
     """
-    Represents a command for the RCON server, including the command string, the user
-    and an optional Future to hold the result.
+    Represents a command for the RCON server.
 
-    If _result is None, the command is treated as "fire and forget".
+    If result is None, the command is treated as "fire and forget".
     It is the caller's responsibility to not await get_command_result in
     that case, and exception propagation is undefined behavior, though
     this implementation will not propagate exceptions in that scenario.
+
+    :var RCONCommand command: The command string to be sent to the RCON server.
+    :var User user: The user who issued the command, if applicable.
+    :var int command_id: Generally unused except for batch processing, in which case ids must be unique
+    :var asyncio.Event completion: Signals when the command has completed.
+    :var Future | None result: Holds the result of the command, if required.
+    :var list[RCONCommand] dependencies: RCONCommands that must complete before this one.
     """
 
     command: str
     user: User | None
+    command_id: int = 0
     completion: asyncio.Event = field(default_factory=asyncio.Event)
     result: Future | None = field(default=None, repr=False)
     dependencies: list[RCONCommand] = field(default_factory=list)
@@ -80,6 +87,45 @@ class RCONCommand:
         if self.result is not None:
             return await self.result
         return None
+
+    @staticmethod
+    def topological_sort(commands: list[RCONCommand]) -> list[RCONCommand] | None:
+        """
+        Sorts commands, with sources first
+
+        command_ids must be unique
+
+        :param commands: The list of RCONCommands to sort
+        :type commands: list[RCONCommand]
+        :return: The sorted list of RCONCommands or None if a cycle is detected
+        :rtype: list[RCONCommand] | None
+        """
+
+        sorted_commands = []
+        finished = set()
+        visited = set()
+
+        def depth_first_search(command: RCONCommand):
+            if command.command_id in visited:
+                if command.command_id not in finished:
+                    raise ValueError("Cycle detected in command dependencies")
+                return
+
+            visited.add(command.command_id)
+            for dependency in command.dependencies:
+                depth_first_search(dependency)
+
+            finished.add(command.command_id)
+            sorted_commands.append(command)
+
+        for command in commands:
+            depth_first_search(command)
+
+        if len(sorted_commands) != len(commands):
+            # duplicate command_ids detected
+            return None
+
+        return sorted_commands[::-1]
 
     @classmethod
     def create(
