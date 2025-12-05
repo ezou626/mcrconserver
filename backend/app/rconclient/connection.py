@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
 
 # request id (4) + packet type (4) + 2 null bytes (2)
-PACKET_METADATA_SIZE = 10
+_PACKET_METADATA_SIZE = 10
 
 
 class SocketClient:
@@ -67,7 +67,7 @@ class SocketClient:
         body_bytes = payload.encode("utf-8")
 
         packet_bytes = (
-            struct.pack("<i", len(body_bytes) + PACKET_METADATA_SIZE)
+            struct.pack("<i", len(body_bytes) + _PACKET_METADATA_SIZE)
             + struct.pack("<i", request_id)
             + struct.pack("<i", packet_type.value)
             + body_bytes
