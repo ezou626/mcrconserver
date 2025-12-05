@@ -22,7 +22,7 @@ Allows for easy administration of a Minecraft server over network
 - uv
 - ruff
 
-The RCON client is heavily inspired by [this async RCON client](https://github.com/Iapetus-11/aio-mc-rcon) by [Iapetus-11](https://github.com/Iapetus-11).
+The async RCON connection is heavily inspired by [this async RCON client](https://github.com/Iapetus-11/aio-mc-rcon) by [Iapetus-11](https://github.com/Iapetus-11). The main addition is that the SocketClient that communicates with the server is not designed to be used by itself. Rather, we run a worker with a queue and expose a synchronous send operation to put a job in the queue for the worker to handle. Then, the result can be awaited with a Future if desired. This is a bit more heavyweight, but works well for a web server where we may sometimes not want to wait for a result or deliver multiple commands in a short period of time. We can also natively allow for multiple workers to be spawned, using a few TCP connections to parallelize command execution.
 
 #### Frontend (frontend/)
 
