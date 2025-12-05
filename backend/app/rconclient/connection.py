@@ -10,6 +10,8 @@ Packet format reference: https://minecraft.wiki/w/RCON#Packet_format
 
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import socket
@@ -186,7 +188,7 @@ class SocketClient:
         password: str,
         port: int = 25575,
         timeout: int | None = None,
-    ) -> "SocketClient | None":
+    ) -> SocketClient | None:
         """
         Connects to the RCON server and authenticates, returning a client if successful
 
