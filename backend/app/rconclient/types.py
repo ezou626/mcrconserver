@@ -1,5 +1,8 @@
 """Data classes used in the RCON client module."""
 
+from __future__ import annotations
+
+import asyncio
 from enum import IntEnum
 from dataclasses import dataclass, field
 from asyncio import Future, get_event_loop
@@ -16,16 +19,11 @@ class RCONPacketType(IntEnum):
     AUTH_PACKET = 3
 
 
-@dataclass
+@dataclass(frozen=True)
 class RCONCommand:
     """
     Represents a command for the RCON server, including the command string, the user
     and an optional Future to hold the result.
-
-    Attributes:
-        command: The RCON command string to be sent to the server
-        user: The User who issued the command
-        _result: An optional Future to hold the result of the command
 
     If _result is None, the command is treated as "fire and forget".
     It is the caller's responsibility to not await get_command_result in
@@ -35,62 +33,72 @@ class RCONCommand:
 
     command: str
     user: User
-    _result: Future | None = field(default=None, repr=False)
+    completion: asyncio.Event = field(default_factory=asyncio.Event)
+    result: Future | None = field(default=None, repr=False)
+    dependencies: list[RCONCommand] = field(default_factory=list)
 
-    def __init__(self, command: str, user: User, require_result: bool = True) -> None:
-        """Initialize an RCONCommand instance, with or without a Future for the result.
-
-        Args:
-            command: The RCON command string to be sent to the server
-            user: The User who issued the command
-            require_result: Whether to create a Future for the command result
+    def add_dependency(self, dependency: RCONCommand):
         """
-        self.command = command
-        self.user = user
-        if require_result:
-            self._result = get_event_loop().create_future()
-        else:
-            self._result = None
+        Adds a dependency a worker will wait for before executing this command.
+
+        :param dependency: The command that must complete before this one
+        :type dependency: RCONCommand
+        """
+        self.dependencies.append(dependency)
 
     def set_command_result(self, result: str) -> None:
-        """Set the result on the associated Future if one is present.
-
-        Args:
-            result: The result of the command from the Minecraft server.
         """
-        if self._result is not None and not self._result.done():
-            self._result.set_result(result)
+        Set the result on the associated Future if one is present.
+
+        :param result: The result of the command from the Minecraft server
+        :type result: str
+        """
+        if self.result is not None and not self.result.done():
+            self.result.set_result(result)
+            self.completion.set()
 
     def set_command_error(self, error: Exception) -> None:
-        """Set an error on the associated Future if one is present.
-
-        Args:
-            error: The exception that occurred while processing the command.
         """
-        if self._result is not None and not self._result.done():
-            self._result.set_exception(error)
+        Set an error on the associated Future if one is present.
+
+        :param error: The exception that occurred while processing the command.
+        :type error: Exception
+        """
+        if self.result is not None and not self.result.done():
+            self.result.set_exception(error)
+            self.completion.set()
 
     async def get_command_result(self) -> str | None:
-        """Await and get the result from the associated Future if one is present.
-
-        Returns:
-            The result string if a Future exists, else None.
-
-        Raises:
-            Exception: If the command resulted in an error.
         """
-        if self._result is not None:
-            return await self._result
+        Await and get the result from the associated Future if one is present.
+
+        :return: The result string if a Future exists, else None
+        :rtype: str | None
+
+        :raises Exception: If the command resulted in an error.
+        """
+        if self.result is not None:
+            return await self.result
         return None
+
+    @classmethod
+    def create(
+        cls,
+        command: str,
+        user: User,
+        dependencies: list[RCONCommand] | None = None,
+        require_result: bool = False,
+    ) -> RCONCommand:
+        if dependencies is None:
+            dependencies = []
+        result = get_event_loop().create_future() if require_result else None
+        return cls(command=command, user=user, result=result, dependencies=dependencies)
 
 
 @dataclass
 class QueueCommandResult:
-    """Result of attempting to queue a command to the RCON worker
-
-    Attributes:
-        command: The RCONCommand that was queued.
-        error: An optional error message if queuing failed.
+    """
+    Result of attempting to queue a command to the RCON worker
     """
 
     command: RCONCommand
