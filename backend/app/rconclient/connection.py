@@ -41,6 +41,7 @@ class SocketClient:
         password: str,
         port: int,
         timeout: int | None,
+        reconnect_pause: int,
     ) -> None:
         """
         Initializes the SocketClient with packet ID starting at 1.
@@ -62,6 +63,7 @@ class SocketClient:
         self._password = password
         self._port = port
         self._timeout = timeout
+        self._reconnect_pause = reconnect_pause
 
     @staticmethod
     def _format_packet(
@@ -176,15 +178,30 @@ class SocketClient:
             self._writer,
         )
 
+    async def disconnect(self) -> None:
+        """
+        Disconnects from the RCON server and closes the socket (best effort).
+        """
+        try:
+            self._writer.close()
+            await self._writer.wait_closed()
+            self._reader.feed_eof()
+        except Exception:
+            pass  # Ignore errors when closing the socket
+        self._request_id = -1
+
     async def reconnect(self) -> str | None:
         """
-        Should be called after disconnect
+        Destroy old connection and reconnect
 
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
-        if self._request_id != -1:
-            raise RuntimeError("Client was not disconnected before reconnect attempt")
+
+        await self.disconnect()
+
+        if self._reconnect_pause:
+            await asyncio.sleep(self._reconnect_pause)
 
         rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         rcon_socket.connect(("localhost", self._port))
@@ -202,24 +219,13 @@ class SocketClient:
 
         return auth_success
 
-    async def disconnect(self) -> None:
-        """
-        Disconnects from the RCON server and closes the socket (best effort).
-        """
-        try:
-            self._writer.close()
-            await self._writer.wait_closed()
-            self._reader.feed_eof()
-        except Exception:
-            pass  # Ignore errors when closing the socket
-        self._request_id = -1
-
     @classmethod
     async def get_new_client(
         cls,
         password: str,
         port: int = 25575,
         timeout: int | None = None,
+        reconnect_pause: int = 5,
     ) -> SocketClient | None:
         """
         Connects to the RCON server and authenticates, returning a client if successful
@@ -254,4 +260,4 @@ class SocketClient:
         if not auth_success:
             return None
 
-        return cls(reader, writer, password, port, timeout)
+        return cls(reader, writer, password, port, timeout, reconnect_pause)
