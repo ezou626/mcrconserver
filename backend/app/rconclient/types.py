@@ -32,7 +32,7 @@ class RCONCommand:
     """
 
     command: str
-    user: User
+    user: User | None
     completion: asyncio.Event = field(default_factory=asyncio.Event)
     result: Future | None = field(default=None, repr=False)
     dependencies: list[RCONCommand] = field(default_factory=list)
@@ -85,10 +85,24 @@ class RCONCommand:
     def create(
         cls,
         command: str,
-        user: User,
+        user: User | None,
         dependencies: list[RCONCommand] | None = None,
         require_result: bool = False,
     ) -> RCONCommand:
+        """
+        Hide future initialization from end-user
+
+        :param command: the command to execute
+        :type command: str
+        :param user: the app user executing the command
+        :type user: User | None
+        :param dependencies: RCONCommands that must be executed before this one
+        :type dependencies: list[RCONCommand] | None
+        :param require_result: Whether the result will be required in the future by the creator
+        :type require_result: bool
+        :return: the created RCONCommand
+        :rtype: RCONCommand
+        """
         if dependencies is None:
             dependencies = []
         result = get_event_loop().create_future() if require_result else None
