@@ -38,6 +38,9 @@ class SocketClient:
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        password: str,
+        port: int,
+        timeout: int | None,
     ) -> None:
         """
         Initializes the SocketClient with packet ID starting at 1.
@@ -46,10 +49,19 @@ class SocketClient:
         :type reader: asyncio.StreamReader
         :param writer: The StreamWriter for the socket
         :type writer: asyncio.StreamWriter
+        :param password: The RCON password for reconnect attempts
+        :type password: str
+        :param port: The RCON port for reconnect attempts
+        :type port: int
+        :param timeout: The timeout for the socket connection
+        :type timeout: int | None
         """
         self._reader = reader
         self._writer = writer
         self._request_id: int = 1
+        self._password = password
+        self._port = port
+        self._timeout = timeout
 
     @staticmethod
     def _format_packet(
@@ -164,6 +176,32 @@ class SocketClient:
             self._writer,
         )
 
+    async def reconnect(self) -> str | None:
+        """
+        Should be called after disconnect
+
+        :raises TimeoutError: if the socket times out
+        :raises ConnectionError: if the socket is no longer connected
+        """
+        if self._request_id != -1:
+            raise RuntimeError("Client was not disconnected before reconnect attempt")
+
+        rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        rcon_socket.connect(("localhost", self._port))
+        rcon_socket.settimeout(self._timeout)
+
+        reader, writer = await asyncio.open_connection(sock=rcon_socket)
+
+        auth_success = await SocketClient._send_packet(
+            self._password, RCONPacketType.AUTH_PACKET, 0, reader, writer
+        )
+
+        if auth_success:
+            self._reader, self._writer = reader, writer
+            self._request_id = 1
+
+        return auth_success
+
     async def disconnect(self) -> None:
         """
         Disconnects from the RCON server and closes the socket (best effort).
@@ -185,6 +223,9 @@ class SocketClient:
     ) -> SocketClient | None:
         """
         Connects to the RCON server and authenticates, returning a client if successful
+
+        This should be the go-to way to create an instance of this class to identify
+        password errors early on.
 
         :param password: The RCON password
         :type password: str
@@ -213,4 +254,4 @@ class SocketClient:
         if not auth_success:
             return None
 
-        return cls(reader, writer)
+        return cls(reader, writer, password, port, timeout)
