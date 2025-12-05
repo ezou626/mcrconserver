@@ -1,12 +1,12 @@
-from .client import queue_command
+"""
+Provides async RCON execution functionality for backend operations.
+"""
+
 from .types import RCONCommand, QueueCommandResult
-from .worker import shutdown_worker, worker, get_connection_event
+from .worker import RCONWorkerPool
 
 __all__ = [
-    "shutdown_worker",
-    "worker",
-    "get_connection_event",
-    "queue_command",
+    "RCONWorkerPool",
     "RCONCommand",
     "QueueCommandResult",
 ]
