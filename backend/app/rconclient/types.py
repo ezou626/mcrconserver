@@ -101,37 +101,44 @@ class RCONCommand:
         :rtype: list[RCONCommand] | None
         """
 
+        # Check for duplicate command_ids first
+        command_ids = [cmd.command_id for cmd in commands]
+        if len(set(command_ids)) != len(command_ids):
+            return None
+
         sorted_commands = []
         finished = set()
-        visited = set()
+        visiting = set()  # Track nodes currently being visited (for cycle detection)
 
         def depth_first_search(command: RCONCommand):
-            if command.command_id in visited:
-                if command.command_id not in finished:
-                    raise ValueError("Cycle detected in command dependencies")
-                return
+            if command.command_id in finished:
+                return  # Already processed
 
-            visited.add(command.command_id)
+            if command.command_id in visiting:
+                raise ValueError("Cycle detected in command dependencies")
+
+            visiting.add(command.command_id)
+
+            # Process all dependencies first
             for dependency in command.dependencies:
                 depth_first_search(dependency)
 
+            visiting.remove(command.command_id)
             finished.add(command.command_id)
             sorted_commands.append(command)
 
         for command in commands:
-            depth_first_search(command)
+            if command.command_id not in finished:
+                depth_first_search(command)
 
-        if len(sorted_commands) != len(commands):
-            # duplicate command_ids detected
-            return None
-
-        return sorted_commands[::-1]
+        return sorted_commands
 
     @classmethod
     def create(
         cls,
         command: str,
-        user: User | None,
+        user: User | None = None,
+        command_id: int = 0,
         dependencies: list[RCONCommand] | None = None,
         require_result: bool = False,
     ) -> RCONCommand:
@@ -152,7 +159,13 @@ class RCONCommand:
         if dependencies is None:
             dependencies = []
         result = get_event_loop().create_future() if require_result else None
-        return cls(command=command, user=user, result=result, dependencies=dependencies)
+        return cls(
+            command=command,
+            command_id=command_id,
+            user=user,
+            result=result,
+            dependencies=dependencies,
+        )
 
 
 @dataclass
