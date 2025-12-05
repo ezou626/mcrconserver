@@ -129,6 +129,9 @@ class SocketClient:
         """
         Sends a packet through the given socket and reads the response.
 
+        Handles multi-packet responses by sending a dummy command with type 200
+        and collecting all packets until the "Unknown request c8" response.
+
         :param payload: The body of the packet
         :type payload: str
         :param packet_type: The type of the packet (RCONPacketType)
@@ -145,15 +148,44 @@ class SocketClient:
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
-        # synchronous send and receive
+        # Send the original command
         writer.write(SocketClient._format_packet(payload, packet_type, request_id))
         await writer.drain()
-        response_id, response_body = await SocketClient._read_response(reader)
 
-        if response_id == -1:
-            return None
+        if packet_type != RCONPacketType.COMMAND_PACKET:
+            response_id, response_body = await SocketClient._read_response(reader)
 
-        return response_body
+            if response_id == -1:
+                return None
+
+            return response_body
+
+        dummy_request_id = request_id + 1000
+        body_bytes = b""
+        dummy_packet = (
+            struct.pack("<i", len(body_bytes) + _PACKET_METADATA_SIZE)
+            + struct.pack("<i", dummy_request_id)
+            + struct.pack("<i", RCONPacketType.DUMMY_PACKET)
+            + body_bytes
+            + b"\x00\x00"
+        )
+        writer.write(dummy_packet)
+        await writer.drain()
+
+        response_parts = []
+        while True:
+            response_id, response_body = await SocketClient._read_response(reader)
+
+            if response_id == -1:
+                return None
+
+            if response_id == dummy_request_id:
+                break
+
+            if response_id == request_id:
+                response_parts.append(response_body)
+
+        return "".join(response_parts)
 
     async def send_command(self, command: str) -> str | None:
         """
@@ -213,7 +245,7 @@ class SocketClient:
             self._password, RCONPacketType.AUTH_PACKET, 0, reader, writer
         )
 
-        if auth_success:
+        if auth_success is not None:
             self._reader, self._writer = reader, writer
             self._request_id = 1
 
@@ -257,7 +289,7 @@ class SocketClient:
             password, RCONPacketType.AUTH_PACKET, 0, reader, writer
         )
 
-        if not auth_success:
+        if auth_success is None:
             return None
 
         return cls(reader, writer, password, port, timeout, reconnect_pause)
