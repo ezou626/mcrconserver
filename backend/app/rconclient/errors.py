@@ -13,12 +13,6 @@ class RCONClientNotConnected(Exception):
     pass
 
 
-class RCONClientAuthenticationFailed(Exception):
-    """Raised when authentication with the RCON server fails due to incorrect password."""
-
-    pass
-
-
 class RCONClientNotAuthenticated(Exception):
     """Raised when the client is not authenticated with the RCON server."""
 
