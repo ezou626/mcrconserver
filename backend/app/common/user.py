@@ -1,4 +1,4 @@
-"""Fundamental data model for auth"""
+"""Fundamental user data model for app"""
 
 from dataclasses import dataclass
 from enum import IntEnum
