@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic import BaseModel
 
 
@@ -12,7 +13,7 @@ class PaginationInfo(BaseModel):
     @classmethod
     def from_query_params(
         cls, page: int, limit: int, total_count: int
-    ) -> "PaginationInfo":
+    ) -> PaginationInfo:
         """Helper function to create pagination info from query parameters
 
         Args:
