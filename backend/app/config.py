@@ -10,7 +10,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 
-from app.rconclient.types import ShutdownDetails
+from app.rconclient import RCONWorkerPoolConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +51,9 @@ class AppConfig:
     rcon_password: str = field(
         default_factory=lambda: AppConfig._getenv_str_required("RCON_PASSWORD")
     )
+    rcon_port: int = field(
+        default_factory=lambda: AppConfig._getenv_int_required("RCON_PORT", 25575)
+    )
     rcon_socket_timeout: int | None = field(
         default_factory=lambda: AppConfig._getenv_int("RCON_SOCKET_TIMEOUT")
     )
@@ -64,17 +67,17 @@ class AppConfig:
     # Shutdown configuration
     shutdown_grace_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
-            "SHUTDOWN_GRACE_PERIOD", ShutdownDetails.DISABLE
+            "SHUTDOWN_GRACE_PERIOD", RCONWorkerPoolConfig.DISABLE
         )
     )
     shutdown_queue_clear_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
-            "SHUTDOWN_QUEUE_CLEAR_PERIOD", ShutdownDetails.NO_TIMEOUT
+            "SHUTDOWN_QUEUE_CLEAR_PERIOD", RCONWorkerPoolConfig.NO_TIMEOUT
         )
     )
     shutdown_await_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
-            "SHUTDOWN_AWAIT_PERIOD", ShutdownDetails.NO_TIMEOUT
+            "SHUTDOWN_AWAIT_PERIOD", RCONWorkerPoolConfig.NO_TIMEOUT
         )
     )
 
@@ -94,13 +97,18 @@ class AppConfig:
         logging.basicConfig(level=numeric_level, force=True)
 
     @property
-    def shutdown_details(self) -> ShutdownDetails:
-        """Create a ShutdownDetails instance from this configuration.
+    def worker_config(self) -> RCONWorkerPoolConfig:
+        """Create a RCONWorkerPoolConfig instance from this configuration.
 
-        :return: Configured ShutdownDetails instance
-        :rtype: ShutdownDetails
+        :return: Configured RCONWorkerPoolConfig instance
+        :rtype: RCONWorkerPoolConfig
         """
-        return ShutdownDetails(
+        return RCONWorkerPoolConfig(
+            password=self.rcon_password,
+            port=self.rcon_port,
+            socket_timeout=self.rcon_socket_timeout,
+            worker_count=self.worker_count,
+            reconnect_pause=self.reconnect_pause,
             grace_period=self.shutdown_grace_period,
             queue_clear_period=self.shutdown_queue_clear_period,
             await_shutdown_period=self.shutdown_await_period,
