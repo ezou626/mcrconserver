@@ -18,7 +18,7 @@ import logging
 import socket
 import struct
 
-from rcon_exceptions import RCONClientIncorrectPassword
+from .rcon_exceptions import RCONClientIncorrectPassword
 
 from .types import RCONPacketType
 
