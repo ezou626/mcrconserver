@@ -12,7 +12,7 @@ from app.auth import (
     validate_api_key,
     validate_jwt_token,
 )
-from app.config import AppConfig
+from backend.app.src.config import AppConfig
 from app.common import User, Role
 from app.rconclient import RCONWorkerPool, RCONCommand
 
