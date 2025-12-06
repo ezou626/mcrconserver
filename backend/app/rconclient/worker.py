@@ -201,7 +201,7 @@ class RCONWorkerPool:
 
     def __init__(
         self,
-        config: RCONWorkerPoolConfig,
+        config: RCONWorkerPoolConfig | None = None,
     ) -> None:
         """Initialize the RCON worker pool.
 
@@ -230,6 +230,9 @@ class RCONWorkerPool:
         :raises TimeoutError: If any worker times out during connection
         :raises ConnectionError: If any worker fails to connect
         """
+
+        if self.config is None:
+            raise ValueError("RCONWorkerPool configuration must be provided")
 
         if self.config.password is None:
             raise RCONClientIncorrectPassword("Password must be provided")
@@ -270,6 +273,10 @@ class RCONWorkerPool:
         :return: True if workers shut down within timeout, False otherwise
         :rtype: bool
         """
+
+        if self.config is None:
+            raise ValueError("RCONWorkerPool configuration must be provided")
+
         timeout = self.config.await_shutdown_period
 
         # Handle DISABLE case
@@ -322,6 +329,10 @@ class RCONWorkerPool:
         4. Wait for workers to shut down gracefully
         5. Force cancel workers if needed
         """
+
+        if self.config is None:
+            raise ValueError("RCONWorkerPool configuration must be provided")
+
         LOGGER.info("Shutting down RCON worker pool")
         self.state.pool_should_shutdown = True
 
