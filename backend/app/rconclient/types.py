@@ -186,18 +186,3 @@ class RCONCommand:
             result=result,
             dependencies=dependencies,
         )
-
-
-@dataclass
-class QueueCommandResult:
-    """
-    Result of attempting to queue a command to the RCON worker.
-
-    :param command: The RCON command that was queued
-    :type command: RCONCommand
-    :param error: Error message if queueing failed, None if successful
-    :type error: str | None
-    """
-
-    command: RCONCommand
-    error: str | None = None
