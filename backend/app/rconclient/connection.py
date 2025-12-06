@@ -6,7 +6,7 @@ and receiving results asynchronously. The philosophy is to bubble up
 socket exceptions for handling reconnects/retries, and return null results
 for authentication failures. Because we consider mainly long-lived connections,
 we don't support the async context manager pattern here, but instead in the
-wrapping resource Worker.
+wrapping resource RCONWorkerPool.
 
 Packet format reference: https://minecraft.wiki/w/RCON#Packet_format
 """
@@ -25,9 +25,6 @@ from .types import RCONPacketType
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
 
-# request id (4) + packet type (4) + 2 null bytes (2)
-_PACKET_METADATA_SIZE = 10
-
 
 class SocketClient:
     """
@@ -35,6 +32,9 @@ class SocketClient:
 
     Supports single-threaded && single-coroutine access only.
     """
+
+    # request id (4) + packet type (4) + 2 null bytes (2)
+    _PACKET_METADATA_SIZE = 10
 
     def __init__(
         self,
@@ -86,7 +86,7 @@ class SocketClient:
         body_bytes = payload.encode("utf-8")
 
         packet_bytes = (
-            struct.pack("<i", len(body_bytes) + _PACKET_METADATA_SIZE)
+            struct.pack("<i", len(body_bytes) + SocketClient._PACKET_METADATA_SIZE)
             + struct.pack("<i", request_id)
             + struct.pack("<i", packet_type.value)
             + body_bytes
@@ -165,7 +165,7 @@ class SocketClient:
         dummy_request_id = request_id + 1000
         body_bytes = b""
         dummy_packet = (
-            struct.pack("<i", len(body_bytes) + _PACKET_METADATA_SIZE)
+            struct.pack("<i", len(body_bytes) + SocketClient._PACKET_METADATA_SIZE)
             + struct.pack("<i", dummy_request_id)
             + struct.pack("<i", RCONPacketType.DUMMY_PACKET)
             + body_bytes
