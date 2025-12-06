@@ -3,16 +3,23 @@ from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import AuthQueries, router as auth_router
-from app.router import router as api_router, pool as worker_pool
+from app.auth import (
+    AuthQueries,
+    router as auth_router,
+    validate_api_key,
+    validate_jwt_token,
+)
 from app.config import AppConfig
+from app.common import User, Role
+from app.rconclient import RCONWorkerPool, RCONCommand
 
 from dotenv import load_dotenv
 
-LOG = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
+POOL = RCONWorkerPool()
 
 
 def load_env_file(env_path: str | Path) -> None:
@@ -23,10 +30,10 @@ def load_env_file(env_path: str | Path) -> None:
     """
     env_path = Path(env_path)
     if env_path.exists():
-        LOG.info(f"Loading environment variables from {env_path}")
+        LOGGER.info(f"Loading environment variables from {env_path}")
         load_dotenv(env_path)
     else:
-        LOG.debug(f"No .env file found at {env_path}")
+        LOGGER.debug(f"No .env file found at {env_path}")
 
 
 @asynccontextmanager
@@ -35,30 +42,21 @@ async def lifespan(app: FastAPI):
 
     Handles startup and shutdown of the RCON worker pool and other resources.
     """
-    LOG.info("Minecraft RCON Server API is starting")
+    LOGGER.info("Minecraft RCON Server API is starting")
 
     load_env_file(os.getenv("MCRCON_ENV_FILE", ".env"))
 
-    try:
-        config = AppConfig()
-    except ValueError as e:
-        LOG.error(f"Configuration error: {e}")
-        raise RuntimeError(f"Startup aborted: {e}") from e
+    config = AppConfig()
 
     AuthQueries.initialize_tables(config.db_path)
 
-    global worker_pool
-    worker_pool.password = config.rcon_password
-    worker_pool.socket_timeout = config.rcon_socket_timeout
-    worker_pool.worker_count = config.worker_count
-    worker_pool.reconnect_pause = config.reconnect_pause
-    worker_pool.shutdown_config = config.shutdown_details
+    POOL.config = config.worker_config
 
-    async with worker_pool:
-        LOG.info("RCON worker pool started successfully")
+    async with POOL:
+        LOGGER.info("RCON worker pool started successfully")
         yield
 
-    LOG.info("Minecraft RCON Server API is shutting down")
+    LOGGER.info("Minecraft RCON Server API is shutting down")
 
 
 app = FastAPI(title="Minecraft RCON Server API", version="0.0.1", lifespan=lifespan)
@@ -78,4 +76,59 @@ def read_root():
 
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
-app.include_router(api_router, prefix="/rcon", tags=["rcon"])
+
+router = APIRouter()
+pool = RCONWorkerPool()  # to be initialized in main
+
+
+@router.post("/session/command")
+async def command(
+    command: str,
+    user: User = Depends(validate_jwt_token),
+    require_result: bool = True,
+):
+    if not user.role.check_permission(Role.ADMIN):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    rcon_command = RCONCommand.create(
+        command=command, user=user, require_result=require_result
+    )
+
+    try:
+        await pool.queue_command(rcon_command)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=f"Error queuing command: {e}")
+
+    if not require_result:
+        return "Command queued successfully"
+
+    try:
+        command_result = await rcon_command.get_command_result()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
+
+    return command_result
+
+
+@router.post("/key/command")
+async def command_with_api_key(
+    command: str, user: User = Depends(validate_api_key), require_result: bool = True
+):
+    rcon_command = RCONCommand.create(
+        command=command, user=user, require_result=require_result
+    )
+
+    try:
+        await pool.queue_command(rcon_command)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=f"Error queuing command: {e}")
+
+    if not require_result:
+        return "Command queued successfully"
+
+    try:
+        command_result = await rcon_command.get_command_result()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error executing command: {e}")
+
+    return command_result
