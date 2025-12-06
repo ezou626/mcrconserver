@@ -288,11 +288,21 @@ class SocketClient:
 
         reader, writer = await asyncio.open_connection(sock=rcon_socket)
 
-        auth_success = await SocketClient._send_packet(
-            password, RCONPacketType.AUTH_PACKET, 0, reader, writer
-        )
+        auth_success = None
+        try:
+            auth_success = await SocketClient._send_packet(
+                password, RCONPacketType.AUTH_PACKET, 0, reader, writer
+            )
+        except (TimeoutError, ConnectionError):
+            reader.feed_eof()
+            writer.close()
+            await writer.wait_closed()
+            raise
 
         if auth_success is None:
+            reader.feed_eof()
+            writer.close()
+            await writer.wait_closed()
             raise RCONClientIncorrectPassword("Incorrect RCON password")
 
         return cls(reader, writer, password, port, timeout, reconnect_pause)
