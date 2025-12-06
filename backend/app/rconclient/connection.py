@@ -18,6 +18,8 @@ import logging
 import socket
 import struct
 
+from rcon_exceptions import RCONClientIncorrectPassword
+
 from .types import RCONPacketType
 
 LOGGER = logging.getLogger(__name__)
@@ -258,7 +260,7 @@ class SocketClient:
         port: int = 25575,
         timeout: int | None = None,
         reconnect_pause: int = 5,
-    ) -> SocketClient | None:
+    ) -> SocketClient:
         """
         Connects to the RCON server and authenticates, returning a client if successful
 
@@ -276,6 +278,7 @@ class SocketClient:
 
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
+        :raises RCONClientIncorrectPassword: if the password is incorrect
         """
 
         # only designed for localhost connections for security
@@ -290,6 +293,6 @@ class SocketClient:
         )
 
         if auth_success is None:
-            return None
+            raise RCONClientIncorrectPassword("Incorrect RCON password")
 
         return cls(reader, writer, password, port, timeout, reconnect_pause)
