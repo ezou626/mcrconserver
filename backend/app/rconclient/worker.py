@@ -32,54 +32,16 @@ timing requirements (when the rest of the app exits, for example).
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Any, ClassVar
 import logging
+from typing import Any
 
-from .types import RCONCommand
+from .types import RCONCommand, ShutdownDetails
 from .connection import SocketClient
 
 from .rcon_exceptions import RCONClientIncorrectPassword
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
-
-
-@dataclass
-class ShutdownDetails:
-    """Configure shutdown options for the RCON worker pool.
-
-    This class controls how the worker pool shuts down when exiting a context
-    manager or when shutdown() is called explicitly.
-
-    :cvar NO_TIMEOUT: Constant indicating indefinite waiting for phase completion
-    :cvar DISABLE: Constant indicating the phase should be skipped
-
-    :param grace_period: Seconds to wait for remaining queue items to process.
-                        Set to DISABLE to skip graceful processing.
-                        Set to NO_TIMEOUT for indefinite wait.
-    :type grace_period: int | None
-
-    :param queue_clear_period: Seconds to wait while clearing remaining queue items with errors.
-                              Set to DISABLE to skip this phase.
-                              Set to NO_TIMEOUT for indefinite wait.
-    :type queue_clear_period: int | None
-
-    :param await_shutdown_period: Seconds to wait for workers to shut down gracefully.
-                                 Set to DISABLE for immediate cancellation.
-                                 Set to NO_TIMEOUT for indefinite wait.
-    :type await_shutdown_period: int | None
-    """
-
-    NO_TIMEOUT: ClassVar[None] = None
-    DISABLE: ClassVar[int] = 0
-
-    grace_period: int | None = field(default=DISABLE)
-    queue_clear_period: int | None = field(default=NO_TIMEOUT)
-    await_shutdown_period: int | None = field(default=NO_TIMEOUT)
-
-    pool_should_shutdown: bool = field(default=False, init=False, repr=False)
-    worker_should_shutdown: bool = field(default=False, init=False, repr=False)
 
 
 def _fail_remaining_commands(queue: asyncio.Queue[RCONCommand]) -> None:
