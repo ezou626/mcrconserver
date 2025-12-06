@@ -96,8 +96,10 @@ async def command(
 
     try:
         await pool.queue_command(rcon_command)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=f"Error queuing command: {e}")
+    except RuntimeError:
+        raise HTTPException(
+            status_code=500, detail="Error queuing command: worker shutting down"
+        )
 
     if not require_result:
         return "Command queued successfully"
@@ -120,8 +122,10 @@ async def command_with_api_key(
 
     try:
         await pool.queue_command(rcon_command)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=f"Error queuing command: {e}")
+    except RuntimeError:
+        raise HTTPException(
+            status_code=500, detail="Error queuing command: worker shutting down"
+        )
 
     if not require_result:
         return "Command queued successfully"
