@@ -43,7 +43,7 @@ class SocketClient:
         password: str,
         port: int,
         timeout: int | None,
-        reconnect_pause: int,
+        reconnect_pause: int | None,
     ) -> None:
         """
         Initializes the SocketClient with packet ID starting at 1.
@@ -259,7 +259,7 @@ class SocketClient:
         password: str,
         port: int = 25575,
         timeout: int | None = None,
-        reconnect_pause: int = 5,
+        reconnect_pause: int | None = None,
     ) -> SocketClient:
         """
         Connects to the RCON server and authenticates, returning a client if successful
