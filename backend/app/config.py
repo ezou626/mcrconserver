@@ -78,20 +78,7 @@ class AppConfig:
         )
     )
 
-    @property
-    def shutdown_details(self) -> ShutdownDetails:
-        """Create a ShutdownDetails instance from this configuration.
-
-        :return: Configured ShutdownDetails instance
-        :rtype: ShutdownDetails
-        """
-        return ShutdownDetails(
-            grace_period=self.shutdown_grace_period,
-            queue_clear_period=self.shutdown_queue_clear_period,
-            await_shutdown_period=self.shutdown_await_period,
-        )
-
-    def setup_logging(self) -> None:
+    def __post_init__(self) -> None:
         """Configure logging based on the configuration.
 
         Sets up basic logging configuration if logging_level is specified.
@@ -105,6 +92,19 @@ class AppConfig:
             LOGGER.warning(f"Invalid log level: {self.logging_level}, using INFO")
             numeric_level = logging.INFO
         logging.basicConfig(level=numeric_level, force=True)
+
+    @property
+    def shutdown_details(self) -> ShutdownDetails:
+        """Create a ShutdownDetails instance from this configuration.
+
+        :return: Configured ShutdownDetails instance
+        :rtype: ShutdownDetails
+        """
+        return ShutdownDetails(
+            grace_period=self.shutdown_grace_period,
+            queue_clear_period=self.shutdown_queue_clear_period,
+            await_shutdown_period=self.shutdown_await_period,
+        )
 
     @staticmethod
     def _getenv_str_required(key: str) -> str:
