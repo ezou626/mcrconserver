@@ -16,7 +16,7 @@ import socket
 import struct
 from dataclasses import dataclass
 
-from backend.app.src.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
+from app.src.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
 
 from .command import RCONPacketType
 
