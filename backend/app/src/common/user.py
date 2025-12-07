@@ -1,6 +1,5 @@
 """Fundamental user data model for app."""
 
-from dataclasses import dataclass
 from enum import IntEnum
 
 
@@ -20,9 +19,8 @@ class Role(IntEnum):
         return self.value <= required_role.value
 
 
-@dataclass
-class User:
-    """Data structure representing a user."""
+class UserBase:
+    """Base class for user-related data structures."""
 
     username: str
     role: Role
