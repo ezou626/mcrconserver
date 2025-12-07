@@ -1,4 +1,4 @@
-"""All queries related to authentication and API key management.
+"""Authentication and API key management database utilities.
 
 Using the AuthQueries class as a repository for
 authentication-related queries.
