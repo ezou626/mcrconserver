@@ -7,8 +7,34 @@ To use the UI only (not the API), SSH tunnelling is also ok.
 
 ## Run
 
+### Development (with auto-reload)
+
 ```bash
-uv run fastapi run main:app --host 0.0.0.0 --port 8000 # or whatever port
+# With fastapi CLI if you want more workers
+export ENV_FILE="/path/to/env/file"
+uv run fastapi dev main.py --host X.X.X.X --port 8000 --workers 4
+
+# Alternative: using uvicorn directly
+export ENV_FILE="/path/to/env/file"
+uv run uvicorn main:app --reload --host X.X.X.X --port 8000 --workers 4
+
+# Using the module directly with environment file
+uv run python -m app --env-file .env --reload --host X.X.X.X --port 8000
+```
+
+### Production
+
+```bash
+
+# With fastapi CLI if you want more workers
+export ENV_FILE="/path/to/env/file"
+uv run fastapi run main.py --host X.X.X.X --port 8000 --workers 4
+
+# Alternative: using uvicorn directly
+uv run uvicorn main:app --host X.X.X.X --port 8000 --workers 4
+
+# Using the module directly with environment file
+uv run python -m app --env-file .env --host X.X.X.X --port 8000
 ```
 
 ## Test
