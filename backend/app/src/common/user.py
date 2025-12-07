@@ -1,5 +1,6 @@
 """Fundamental user data model for app."""
 
+from dataclasses import dataclass
 from enum import IntEnum
 
 
@@ -24,3 +25,12 @@ class UserBase:
 
     username: str
     role: Role
+
+
+@dataclass
+class User(UserBase):
+    """Data structure representing a user.
+
+    :param str username: The username of the user
+    :param Role role: The role of the user
+    """
