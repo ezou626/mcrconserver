@@ -1,3 +1,5 @@
-from .user import User, Role
+"""Common data models and utilities for the application."""
 
-__all__ = ["User", "Role"]
+from .user import Role, UserBase
+
+__all__ = ["Role", "UserBase"]
