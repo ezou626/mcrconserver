@@ -338,7 +338,7 @@ class AuthQueries:
         options: KeyListOptions,
         where_clause: str,
         params: list,
-    ) -> list[tuple]:
+    ) -> list[tuple[str, str, str]]:
         offset = (options.page - 1) * options.limit
 
         order_clause = " "
@@ -357,11 +357,14 @@ class AuthQueries:
         rows = await result.fetchall()
         return [tuple(r) for r in rows]
 
-    async def list_api_keys(self, options: KeyListOptions) -> tuple[list[tuple], int]:
+    async def list_api_keys(
+        self,
+        options: KeyListOptions,
+    ) -> tuple[list[tuple[str, str, str]], int]:
         """List API keys based on the given options.
 
         :param options: Options for filtering and pagination
-        :return: Tuple of (list of API key tuples, total count)
+        :return: Tuple of (list of (key, username, created_at), total count)
         """
         where_clause, params = self._build_filters(options)
         total = await self._count_api_keys(where_clause, params)
