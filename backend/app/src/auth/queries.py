@@ -6,13 +6,13 @@ authentication-related queries.
 
 import logging
 import secrets
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import aiosqlite
 from aiosqlite import Connection
 from bcrypt import checkpw, gensalt, hashpw
+from pydantic import BaseModel
 
 from app.src.common import Role, User
 
@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
 
 
-class ApiKeyOrderBy(StrEnum):
+class APIKeyOrderBy(StrEnum):
     """Fields to order API key listings by."""
 
     CREATED_AT = "created_at"
@@ -33,8 +33,7 @@ class ApiKeyOrderBy(StrEnum):
     API_KEY = "api_key"
 
 
-@dataclass
-class KeyListOptions:
+class KeyListOptions(BaseModel):
     """Options for listing API keys.
 
     :param user: Filter by specific user. If None, returns all API keys
@@ -49,7 +48,7 @@ class KeyListOptions:
     user: User | None = None
     page: int = 1
     limit: int = 10
-    order_by: ApiKeyOrderBy | None = ApiKeyOrderBy.CREATED_AT
+    order_by: APIKeyOrderBy | None = APIKeyOrderBy.CREATED_AT
     order_desc: bool = True
     created_after: datetime | None = None
     created_before: datetime | None = None

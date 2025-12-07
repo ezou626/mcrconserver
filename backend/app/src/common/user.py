@@ -19,6 +19,14 @@ class Role(IntEnum):
         """
         return self.value <= required_role.value
 
+    def has_higher_permission(self, other_role: Role) -> bool:
+        """Check if the current role has higher permission than another role.
+
+        :param other_role: The role to compare against
+        :return: True if the current role has higher permission, False otherwise
+        """
+        return self.value < other_role.value
+
 
 class UserBase:
     """Base class for user-related data structures."""
