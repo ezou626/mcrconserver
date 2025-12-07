@@ -1,5 +1,4 @@
-"""
-RCON communication client.
+"""RCON communication client.
 
 Intended for use within an asyncio task worker for delivering commands
 and receiving results asynchronously. The philosophy is to bubble up
@@ -17,8 +16,9 @@ import asyncio
 import logging
 import socket
 import struct
+from dataclasses import dataclass
 
-from .rcon_exceptions import RCONClientIncorrectPassword
+from backend.app.src.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
 
 from .types import RCONPacketType
 
@@ -26,9 +26,25 @@ LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
 
 
-class SocketClient:
+@dataclass
+class SocketClientConfig:
+    """Configuration for the RCON SocketClient.
+
+    :param password: The RCON password
+    :param port: The RCON port (default: 25575)
+    :param socket_timeout: The socket timeout in seconds (default: None)
+    :param reconnect_pause: Pause duration in seconds before
+        reconnecting (default: None)
     """
-    Client that manages an RCON connection to a server.
+
+    password: str
+    port: int = 25575
+    socket_timeout: int | None = None
+    reconnect_pause: int | None = None
+
+
+class SocketClient:
+    """Client that manages an RCON connection to a server.
 
     Supports single-threaded && single-coroutine access only.
     """
@@ -40,52 +56,38 @@ class SocketClient:
         self,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
-        password: str,
-        port: int,
-        timeout: int | None,
-        reconnect_pause: int | None,
+        config: SocketClientConfig,
     ) -> None:
-        """
-        Initializes the SocketClient with packet ID starting at 1.
+        """Initialize the SocketClient with packet ID starting at 1.
 
         :param reader: The StreamReader for the socket
-        :type reader: asyncio.StreamReader
         :param writer: The StreamWriter for the socket
-        :type writer: asyncio.StreamWriter
-        :param password: The RCON password for reconnect attempts
-        :type password: str
-        :param port: The RCON port for reconnect attempts
-        :type port: int
-        :param timeout: The timeout for the socket connection
-        :type timeout: int | None
+        :param config: The SocketClientConfig instance
         """
         self._reader = reader
         self._writer = writer
         self._request_id: int = 1
-        self._password = password
-        self._port = port
-        self._timeout = timeout
-        self._reconnect_pause = reconnect_pause
+        self._password = config.password
+        self._port = config.port
+        self._timeout = config.socket_timeout
+        self._reconnect_pause = config.reconnect_pause
 
     @staticmethod
     def _format_packet(
-        payload: str, packet_type: RCONPacketType, request_id: int
+        payload: str,
+        packet_type: RCONPacketType,
+        request_id: int,
     ) -> bytes:
-        """
-        Formats a packet to be sent to the RCON server
+        """Format a packet to be sent to the RCON server.
 
         :param payload: The body of the packet
-        :type payload: str
         :param packet_type: The type of the packet (RCONPacketType)
-        :type packet_type: RCONPacketType
         :param request_id: The request ID for the packet
-        :type request_id: int
         :return: The formatted packet as bytes
-        :rtype: bytes
         """
         body_bytes = payload.encode("utf-8")
 
-        packet_bytes = (
+        return (
             struct.pack("<i", len(body_bytes) + SocketClient._PACKET_METADATA_SIZE)
             + struct.pack("<i", request_id)
             + struct.pack("<i", packet_type.value)
@@ -93,22 +95,16 @@ class SocketClient:
             + b"\x00\x00"
         )
 
-        return packet_bytes
-
     @staticmethod
     async def _read_response(reader: asyncio.StreamReader) -> tuple[int, str]:
-        """
-        Reads a response packet from the RCON server.
+        """Read a valid and full command response from the RCON server.
 
         :param reader: The StreamReader for the RCON socket
-        :type reader: asyncio.StreamReader
         :return: A tuple of (response_id, response_body)
-        :rtype: tuple[int, str]
 
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
-
         # get the length
         response_bytes = await reader.readexactly(4)
         response_length: int = struct.unpack("<i", response_bytes)[0]
@@ -128,24 +124,17 @@ class SocketClient:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> str | None:
-        """
-        Sends a packet through the given socket and reads the response.
+        """Send a packet through the given socket and reads the response.
 
         Handles multi-packet responses by sending a dummy command with type 200
         and collecting all packets until the "Unknown request c8" response.
 
         :param payload: The body of the packet
-        :type payload: str
         :param packet_type: The type of the packet (RCONPacketType)
-        :type packet_type: RCONPacketType
         :param request_id: The request ID for the packet local to this client
-        :type request_id: int
         :param reader: The StreamReader for the RCON socket
-        :type reader: asyncio.StreamReader
         :param writer: The StreamWriter for the RCON socket
-        :type writer: asyncio.StreamWriter
         :return: The response from the server, or None if auth fails
-        :rtype: str | None
 
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
@@ -190,8 +179,7 @@ class SocketClient:
         return "".join(response_parts)
 
     async def send_command(self, command: str) -> str | None:
-        """
-        Sends a command to the RCON server and returns the response.
+        """Send a command to the RCON server and returns the response.
 
         :param command: The RCON command to send
         :type command: str
@@ -202,7 +190,8 @@ class SocketClient:
         :raises ConnectionError: if the socket is no longer connected
         """
         if self._request_id == -1:
-            raise ConnectionError("Client is disconnected")
+            msg = "Client disconnected"
+            raise ConnectionError(msg)
         self._request_id += 1
         return await SocketClient._send_packet(
             command,
@@ -213,25 +202,22 @@ class SocketClient:
         )
 
     async def disconnect(self) -> None:
-        """
-        Disconnects from the RCON server and closes the socket (best effort).
-        """
+        """Disconnects from the RCON server and closes the socket (best effort)."""
         try:
             self._writer.close()
             await self._writer.wait_closed()
             self._reader.feed_eof()
         except Exception:
-            pass  # Ignore errors when closing the socket
+            # Ignore errors when closing the socket
+            LOGGER.exception("Error while closing RCON socket")
         self._request_id = -1
 
     async def reconnect(self) -> str | None:
-        """
-        Destroy old connection and reconnect
+        """Destroy old connection and reconnect.
 
         :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
-
         await self.disconnect()
 
         if self._reconnect_pause:
@@ -244,7 +230,11 @@ class SocketClient:
         reader, writer = await asyncio.open_connection(sock=rcon_socket)
 
         auth_success = await SocketClient._send_packet(
-            self._password, RCONPacketType.AUTH_PACKET, 0, reader, writer
+            self._password,
+            RCONPacketType.AUTH_PACKET,
+            0,
+            reader,
+            writer,
         )
 
         if auth_success is not None:
@@ -256,13 +246,9 @@ class SocketClient:
     @classmethod
     async def get_new_client(
         cls,
-        password: str,
-        port: int = 25575,
-        timeout: int | None = None,
-        reconnect_pause: int | None = None,
+        config: SocketClientConfig,
     ) -> SocketClient:
-        """
-        Connects to the RCON server and authenticates, returning a client if successful
+        """Connect to the RCON server and get a new client.
 
         This should be the go-to way to create an instance of this class to identify
         password errors early on.
@@ -280,18 +266,21 @@ class SocketClient:
         :raises ConnectionError: if the socket is no longer connected
         :raises RCONClientIncorrectPassword: if the password is incorrect
         """
-
         # only designed for localhost connections for security
         rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        rcon_socket.connect(("localhost", port))
-        rcon_socket.settimeout(timeout)
+        rcon_socket.connect(("localhost", config.port))
+        rcon_socket.settimeout(config.socket_timeout)
 
         reader, writer = await asyncio.open_connection(sock=rcon_socket)
 
         auth_success = None
         try:
             auth_success = await SocketClient._send_packet(
-                password, RCONPacketType.AUTH_PACKET, 0, reader, writer
+                config.password,
+                RCONPacketType.AUTH_PACKET,
+                0,
+                reader,
+                writer,
             )
         except (TimeoutError, ConnectionError):
             reader.feed_eof()
@@ -303,6 +292,7 @@ class SocketClient:
             reader.feed_eof()
             writer.close()
             await writer.wait_closed()
-            raise RCONClientIncorrectPassword("Incorrect RCON password")
+            msg = "Incorrect RCON password"
+            raise RCONClientIncorrectPasswordError(msg)
 
-        return cls(reader, writer, password, port, timeout, reconnect_pause)
+        return cls(reader, writer, config)
