@@ -34,3 +34,6 @@ class User(UserBase):
     :param str username: The username of the user
     :param Role role: The role of the user
     """
+
+    username: str
+    role: Role
