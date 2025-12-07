@@ -33,17 +33,17 @@ class SocketClientConfig:
     :param socket_timeout: The socket timeout in seconds (default: None)
     :param reconnect_pause: Pause duration in seconds before
         reconnecting (default: None)
-    :param retry_client_auth_attempts: Number of times to retry authentication
-        before giving up (default: -1 for indefinite retries)
+    :param retry_attempts: Number of additional retry attempts after initial try
+        (default: INFINITE for unlimited retries)
     """
 
-    INDEFINITE: ClassVar[int] = -1
+    INFINITE: ClassVar[int] = -1
 
     password: str
     port: int = 25575
     socket_timeout: int | None = None
     reconnect_pause: int | None = None
-    retry_client_auth_attempts: int = field(default=INDEFINITE)
+    retry_attempts: int = field(default=INFINITE)
 
 
 class SocketClient:
@@ -74,7 +74,7 @@ class SocketClient:
         self._port = config.port
         self._timeout = config.socket_timeout
         self._reconnect_pause = config.reconnect_pause
-        self._retry_client_auth_attempts = config.retry_client_auth_attempts
+        self._retry_attempts = config.retry_attempts
 
     @staticmethod
     def _format_packet(
@@ -154,6 +154,46 @@ class SocketClient:
 
         return response_body
 
+    @staticmethod
+    async def _try_connection(
+        port: int,
+        socket_timeout: int | None,
+        num_retries: int,
+        reconnect_pause: int | None = None,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Try connection establishment with retry logic.
+
+        :param port: The RCON port to connect to
+        :param socket_timeout: The socket timeout in seconds
+        :param num_retries: Number of additional retries after initial attempt
+                            (use SocketClientConfig.INFINITE for unlimited)
+        :param reconnect_pause: Optional pause between attempts
+        :return: Connected reader and writer streams
+        :raises ConnectionError: If all attempts fail (only for finite retries)
+        """
+        attempt = 0
+        last_exception = None
+
+        while True:
+            try:
+                if attempt > 0 and reconnect_pause:
+                    await asyncio.sleep(reconnect_pause)
+
+                return await asyncio.wait_for(
+                    asyncio.open_connection("localhost", port),
+                    timeout=socket_timeout,
+                )
+            except (TimeoutError, ConnectionError) as e:
+                last_exception = e
+                attempt += 1
+
+                # Check if we should stop retrying
+                if num_retries != SocketClientConfig.INFINITE and attempt > num_retries:
+                    break
+
+        msg = f"Failed to connect after {attempt} attempts"
+        raise ConnectionError(msg) from last_exception
+
     async def send_command(self, command: str) -> str | None:
         """Send a command to the RCON server and returns the response.
 
@@ -229,22 +269,18 @@ class SocketClient:
         self._request_id = -1
 
     async def reconnect(self) -> str | None:
-        """Destroy old connection and reconnect.
+        """Destroy old connection and reconnect with retry logic.
 
         :raises asyncio.TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
         await self.disconnect()
 
-        if self._reconnect_pause:
-            await asyncio.sleep(self._reconnect_pause)
-
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(
-                "localhost",
-                self._port,
-            ),
-            timeout=self._timeout,
+        reader, writer = await SocketClient._try_connection(
+            self._port,
+            self._timeout,
+            self._retry_attempts,
+            self._reconnect_pause,
         )
 
         auth_success = await SocketClient._send_auth(
@@ -257,6 +293,11 @@ class SocketClient:
         if auth_success is not None:
             self._reader, self._writer = reader, writer
             self._request_id = 1
+        else:
+            # Clean up on auth failure
+            reader.feed_eof()
+            writer.close()
+            await writer.wait_closed()
 
         return auth_success
 
@@ -270,32 +311,22 @@ class SocketClient:
         This should be the go-to way to create an instance of this class to identify
         password errors early on.
 
-        :param password: The RCON password
-        :type password: str
-        :param port: The RCON port (default: 25575)
-        :type port: int
-        :param timeout: The socket timeout in seconds (default: None)
-        :type timeout: int | None
-        :return: A SocketClient if auth is successful, None otherwise
-        :rtype: SocketClient | None
-
+        :param config: The SocketClientConfig with connection parameters
+        :return: A SocketClient if auth is successful
         :raises asyncio.TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
-        :raises RCONClientIncorrectPassword: if the password is incorrect
+        :raises RCONClientIncorrectPasswordError: if the password is incorrect
         """
-        # only designed for localhost connections for security
-
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(
-                "localhost",
-                config.port,
-            ),
-            timeout=config.socket_timeout,
+        # Only designed for localhost connections for security
+        reader, writer = await cls._try_connection(
+            config.port,
+            config.socket_timeout,
+            config.retry_attempts,
+            config.reconnect_pause,
         )
 
-        auth_success = None
         try:
-            auth_success = await SocketClient._send_auth(
+            auth_success = await cls._send_auth(
                 config.password,
                 reader,
                 writer,
