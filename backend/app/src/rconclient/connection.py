@@ -12,9 +12,9 @@ Packet format reference: https://minecraft.wiki/w/RCON#Packet_format
 
 import asyncio
 import logging
-import socket
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import ClassVar
 
 from app.src.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
 
@@ -33,12 +33,17 @@ class SocketClientConfig:
     :param socket_timeout: The socket timeout in seconds (default: None)
     :param reconnect_pause: Pause duration in seconds before
         reconnecting (default: None)
+    :param retry_client_auth_attempts: Number of times to retry authentication
+        before giving up (default: -1 for indefinite retries)
     """
+
+    INDEFINITE: ClassVar[int] = -1
 
     password: str
     port: int = 25575
     socket_timeout: int | None = None
     reconnect_pause: int | None = None
+    retry_client_auth_attempts: int = field(default=INDEFINITE)
 
 
 class SocketClient:
@@ -69,6 +74,7 @@ class SocketClient:
         self._port = config.port
         self._timeout = config.socket_timeout
         self._reconnect_pause = config.reconnect_pause
+        self._retry_client_auth_attempts = config.retry_client_auth_attempts
 
     @staticmethod
     def _format_packet(
@@ -100,7 +106,6 @@ class SocketClient:
         :param reader: The StreamReader for the RCON socket
         :return: A tuple of (response_id, response_body)
 
-        :raises TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
         # get the length
@@ -115,40 +120,72 @@ class SocketClient:
         return response_id, response_body
 
     @staticmethod
-    async def _send_packet(
-        payload: str,
-        packet_type: RCONPacketType,
-        request_id: int,
+    async def _send_auth(
+        password: str,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        socket_timeout: int | None = None,
     ) -> str | None:
-        """Send a packet through the given socket and reads the response.
+        """Send authentication packet and read response (internal use only).
+
+        :param password: The RCON password
+        :param reader: The StreamReader for the RCON socket
+        :param writer: The StreamWriter for the RCON socket
+        :param socket_timeout: The socket timeout in seconds
+        :return: The response from the server, or None if auth fails
+
+        :raises asyncio.TimeoutError: if the socket times out
+        :raises ConnectionError: if the socket is no longer connected
+        """
+        # Send the auth packet
+        writer.write(
+            SocketClient._format_packet(password, RCONPacketType.AUTH_PACKET, 0),
+        )
+        await asyncio.wait_for(writer.drain(), timeout=socket_timeout)
+
+        # Read the single auth response
+        response_id, response_body = await asyncio.wait_for(
+            SocketClient._read_response(reader),
+            timeout=socket_timeout,
+        )
+
+        if response_id == -1:
+            return None
+
+        return response_body
+
+    async def send_command(self, command: str) -> str | None:
+        """Send a command to the RCON server and returns the response.
 
         Handles multi-packet responses by sending a dummy command with type 200
         and collecting all packets until the "Unknown request c8" response.
 
-        :param payload: The body of the packet
-        :param packet_type: The type of the packet (RCONPacketType)
-        :param request_id: The request ID for the packet local to this client
-        :param reader: The StreamReader for the RCON socket
-        :param writer: The StreamWriter for the RCON socket
-        :return: The response from the server, or None if auth fails
+        :param command: The RCON command to send
+        :type command: str
+        :return: The response from the RCON server, or None if auth fails
+        :rtype: str | None
 
-        :raises TimeoutError: if the socket times out
+        :raises asyncio.TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
+        if self._request_id == -1:
+            msg = "Client disconnected"
+            raise ConnectionError(msg)
+
+        self._request_id += 1
+        request_id = self._request_id
+
         # Send the original command
-        writer.write(SocketClient._format_packet(payload, packet_type, request_id))
-        await writer.drain()
+        self._writer.write(
+            SocketClient._format_packet(
+                command,
+                RCONPacketType.COMMAND_PACKET,
+                request_id,
+            ),
+        )
+        await asyncio.wait_for(self._writer.drain(), timeout=self._timeout)
 
-        if packet_type != RCONPacketType.COMMAND_PACKET:
-            response_id, response_body = await SocketClient._read_response(reader)
-
-            if response_id == -1:
-                return None
-
-            return response_body
-
+        # Send dummy packet to handle multi-packet responses
         dummy_request_id = request_id + 1000
         body_bytes = b""
         dummy_packet = (
@@ -158,12 +195,16 @@ class SocketClient:
             + body_bytes
             + b"\x00\x00"
         )
-        writer.write(dummy_packet)
-        await writer.drain()
+        self._writer.write(dummy_packet)
+        await asyncio.wait_for(self._writer.drain(), timeout=self._timeout)
 
+        # Collect all response parts
         response_parts = []
         while True:
-            response_id, response_body = await SocketClient._read_response(reader)
+            response_id, response_body = await asyncio.wait_for(
+                SocketClient._read_response(self._reader),
+                timeout=self._timeout,
+            )
 
             if response_id == -1:
                 return None
@@ -175,29 +216,6 @@ class SocketClient:
                 response_parts.append(response_body)
 
         return "".join(response_parts)
-
-    async def send_command(self, command: str) -> str | None:
-        """Send a command to the RCON server and returns the response.
-
-        :param command: The RCON command to send
-        :type command: str
-        :return: The response from the RCON server, or None if auth fails
-        :rtype: str | None
-
-        :raises TimeoutError: if the socket times out
-        :raises ConnectionError: if the socket is no longer connected
-        """
-        if self._request_id == -1:
-            msg = "Client disconnected"
-            raise ConnectionError(msg)
-        self._request_id += 1
-        return await SocketClient._send_packet(
-            command,
-            RCONPacketType.COMMAND_PACKET,
-            self._request_id,
-            self._reader,
-            self._writer,
-        )
 
     async def disconnect(self) -> None:
         """Disconnects from the RCON server and closes the socket (best effort)."""
@@ -213,7 +231,7 @@ class SocketClient:
     async def reconnect(self) -> str | None:
         """Destroy old connection and reconnect.
 
-        :raises TimeoutError: if the socket times out
+        :raises asyncio.TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
         await self.disconnect()
@@ -221,18 +239,19 @@ class SocketClient:
         if self._reconnect_pause:
             await asyncio.sleep(self._reconnect_pause)
 
-        rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        rcon_socket.connect(("localhost", self._port))
-        rcon_socket.settimeout(self._timeout)
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(
+                "localhost",
+                self._port,
+            ),
+            timeout=self._timeout,
+        )
 
-        reader, writer = await asyncio.open_connection(sock=rcon_socket)
-
-        auth_success = await SocketClient._send_packet(
+        auth_success = await SocketClient._send_auth(
             self._password,
-            RCONPacketType.AUTH_PACKET,
-            0,
             reader,
             writer,
+            self._timeout,
         )
 
         if auth_success is not None:
@@ -260,25 +279,27 @@ class SocketClient:
         :return: A SocketClient if auth is successful, None otherwise
         :rtype: SocketClient | None
 
-        :raises TimeoutError: if the socket times out
+        :raises asyncio.TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         :raises RCONClientIncorrectPassword: if the password is incorrect
         """
         # only designed for localhost connections for security
-        rcon_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        rcon_socket.connect(("localhost", config.port))
-        rcon_socket.settimeout(config.socket_timeout)
 
-        reader, writer = await asyncio.open_connection(sock=rcon_socket)
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(
+                "localhost",
+                config.port,
+            ),
+            timeout=config.socket_timeout,
+        )
 
         auth_success = None
         try:
-            auth_success = await SocketClient._send_packet(
+            auth_success = await SocketClient._send_auth(
                 config.password,
-                RCONPacketType.AUTH_PACKET,
-                0,
                 reader,
                 writer,
+                config.socket_timeout,
             )
         except (TimeoutError, ConnectionError):
             reader.feed_eof()
