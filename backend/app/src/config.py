@@ -10,9 +10,26 @@ import logging
 import os
 from dataclasses import dataclass, field
 
-from app.rconclient import RCONWorkerPoolConfig
+from app.src.rconclient import RCONWorkerPoolConfig
 
 LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
+
+
+def configure_logging(app_config: AppConfig) -> None:
+    """Configure logging based on the application configuration.
+
+    :param app_config: The application configuration instance
+    """
+    if not app_config.logging_level:
+        logging.basicConfig(level=logging.INFO, force=True)
+        return
+
+    numeric_level = getattr(logging, app_config.logging_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        LOGGER.warning("Invalid log level: %s, using INFO", app_config.logging_level)
+        numeric_level = logging.INFO
+    logging.basicConfig(level=numeric_level, force=True)
 
 
 @dataclass
@@ -39,62 +56,50 @@ class AppConfig:
 
     # Database configuration
     db_path: str = field(
-        default_factory=lambda: os.getenv("DB_PATH", AppConfig.DEFAULT_DATABASE_PATH)
+        default_factory=lambda: os.getenv("DB_PATH", AppConfig.DEFAULT_DATABASE_PATH),
     )
 
     # Logging configuration
     logging_level: str | None = field(
-        default_factory=lambda: os.getenv("LOGGING_LEVEL")
+        default_factory=lambda: os.getenv("LOGGING_LEVEL"),
     )
 
     # RCON configuration
     rcon_password: str = field(
-        default_factory=lambda: AppConfig._getenv_str_required("RCON_PASSWORD")
+        default_factory=lambda: AppConfig._getenv_str_required("RCON_PASSWORD"),
     )
     rcon_port: int = field(
-        default_factory=lambda: AppConfig._getenv_int_required("RCON_PORT", 25575)
+        default_factory=lambda: AppConfig._getenv_int_required("RCON_PORT", 25575),
     )
     rcon_socket_timeout: int | None = field(
-        default_factory=lambda: AppConfig._getenv_int("RCON_SOCKET_TIMEOUT")
+        default_factory=lambda: AppConfig._getenv_int("RCON_SOCKET_TIMEOUT"),
     )
     worker_count: int = field(
-        default_factory=lambda: AppConfig._getenv_int_required("WORKER_COUNT", 3)
+        default_factory=lambda: AppConfig._getenv_int_required("WORKER_COUNT", 3),
     )
     reconnect_pause: int = field(
-        default_factory=lambda: AppConfig._getenv_int_required("RECONNECT_PAUSE", 5)
+        default_factory=lambda: AppConfig._getenv_int_required("RECONNECT_PAUSE", 5),
     )
 
     # Shutdown configuration
     shutdown_grace_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
-            "SHUTDOWN_GRACE_PERIOD", RCONWorkerPoolConfig.DISABLE
-        )
+            "SHUTDOWN_GRACE_PERIOD",
+            RCONWorkerPoolConfig.DISABLE,
+        ),
     )
     shutdown_queue_clear_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
-            "SHUTDOWN_QUEUE_CLEAR_PERIOD", RCONWorkerPoolConfig.NO_TIMEOUT
-        )
+            "SHUTDOWN_QUEUE_CLEAR_PERIOD",
+            RCONWorkerPoolConfig.NO_TIMEOUT,
+        ),
     )
     shutdown_await_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
-            "SHUTDOWN_AWAIT_PERIOD", RCONWorkerPoolConfig.NO_TIMEOUT
-        )
+            "SHUTDOWN_AWAIT_PERIOD",
+            RCONWorkerPoolConfig.NO_TIMEOUT,
+        ),
     )
-
-    def __post_init__(self) -> None:
-        """Configure logging based on the configuration.
-
-        Sets up basic logging configuration if logging_level is specified.
-        """
-        if not self.logging_level:
-            logging.basicConfig(level=logging.INFO, force=True)
-            return
-
-        numeric_level = getattr(logging, self.logging_level.upper(), None)
-        if not isinstance(numeric_level, int):
-            LOGGER.warning(f"Invalid log level: {self.logging_level}, using INFO")
-            numeric_level = logging.INFO
-        logging.basicConfig(level=numeric_level, force=True)
 
     @property
     def worker_config(self) -> RCONWorkerPoolConfig:
@@ -126,7 +131,8 @@ class AppConfig:
         """
         value = os.getenv(key)
         if value is None:
-            raise ValueError(f"Required environment variable {key} is not set")
+            msg = f"Required environment variable {key} is not set"
+            raise ValueError(msg)
         return value
 
     @staticmethod
@@ -148,9 +154,8 @@ class AppConfig:
         try:
             return int(value_str)
         except ValueError as e:
-            raise ValueError(
-                f"Environment variable {key} must be an integer, got: {value_str}"
-            ) from e
+            msg = f"Environment variable {key} must be an integer, got: {value_str}"
+            raise ValueError(msg) from e
 
     @staticmethod
     def _getenv_int_required(key: str, default: int) -> int:
@@ -172,6 +177,5 @@ class AppConfig:
         try:
             return int(value_str)
         except ValueError as e:
-            raise ValueError(
-                f"Environment variable {key} must be an integer, got: {value_str}"
-            ) from e
+            msg = f"Environment variable {key} must be an integer, got: {value_str}"
+            raise ValueError(msg) from e
