@@ -10,8 +10,6 @@ wrapping resource RCONWorkerPool.
 Packet format reference: https://minecraft.wiki/w/RCON#Packet_format
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import socket
