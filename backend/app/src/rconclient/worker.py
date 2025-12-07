@@ -36,7 +36,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Self
 
-from .connection import SocketClient
+from .connection import SocketClient, SocketClientConfig
 from .rcon_exceptions import RCONClientIncorrectPasswordError
 
 if TYPE_CHECKING:
@@ -87,6 +87,19 @@ class RCONWorkerPoolConfig:
     grace_period: int | None = field(default=DISABLE)
     queue_clear_period: int | None = field(default=NO_TIMEOUT)
     await_shutdown_period: int | None = field(default=NO_TIMEOUT)
+
+    @property
+    def socket_client_config(self) -> SocketClientConfig:
+        """Get a SocketClientConfig based on this worker pool configuration.
+
+        :return: Socket client configuration
+        """
+        return SocketClientConfig(
+            password=self.password,
+            port=self.port,
+            socket_timeout=self.socket_timeout,
+            reconnect_pause=self.reconnect_pause,
+        )
 
 
 @dataclass
@@ -260,10 +273,7 @@ class RCONWorkerPool:
 
         socket_clients = [
             SocketClient.get_new_client(
-                self.config.password,
-                self.config.port,
-                self.config.socket_timeout,
-                self.config.reconnect_pause,
+                self.config.socket_client_config,
             )
             for _ in range(self.config.worker_count)
         ]
