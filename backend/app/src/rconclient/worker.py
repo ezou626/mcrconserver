@@ -26,8 +26,6 @@ timing requirements (when the rest of the app exits, for example).
         result = await command.get_command_result()
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from dataclasses import dataclass, field
