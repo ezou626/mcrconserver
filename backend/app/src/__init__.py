@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aiosqlite import connect as aiosqlite_connect
@@ -16,6 +17,8 @@ from app.src.auth import (
 )
 from app.src.command_router import configure_command_router
 from app.src.rconclient import RCONWorkerPool
+
+from .config import load_config_from_env
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -33,6 +36,15 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
     :return: Configured FastAPI application
     """
     worker_pool = RCONWorkerPool(config.worker_config)
+
+    if not Path(config.database_path).parent.exists():
+        Path(config.database_path).parent.mkdir(parents=True, exist_ok=True)
+        LOGGER.info(
+            "Created directory for database at %s", Path(config.database_path).parent
+        )
+
+    if not Path(config.database_path).exists():
+        LOGGER.info("Database file does not exist at %s", config.database_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[Any, Any]:
@@ -85,3 +97,6 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
         return "Minecraft RCON Server API"
 
     return app
+
+
+__all__ = ["configure_fastapi_app", "load_config_from_env"]
