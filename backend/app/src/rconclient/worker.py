@@ -139,13 +139,9 @@ async def _worker(
     Handles connection errors gracefully by reconnecting.
 
     :param worker_id: Unique identifier for this worker
-    :type worker_id: int
     :param client: RCON socket client for sending commands
-    :type client: SocketClient
     :param queue: Shared queue containing commands to process
-    :type queue: asyncio.Queue[RCONCommand]
     :param state: Runtime state object for checking shutdown signals
-    :type state: RCONWorkerPoolState
     """
     LOGGER.info("Worker %d: Starting", worker_id)
 
@@ -224,7 +220,6 @@ class RCONWorkerPool:
         """Initialize the RCON worker pool.
 
         :param config: Configuration for the worker pool
-        :type config: RCONWorkerPoolConfig
         """
         self.config = config
         self.state = RCONWorkerPoolState()
@@ -373,7 +368,6 @@ class RCONWorkerPool:
         :meth:`command.get_command_result()` to get the response.
 
         :param command: The command to send to the Minecraft server
-        :type command: RCONCommand
         :raises RuntimeError: If the worker pool is shutting down
 
         **Example:**
