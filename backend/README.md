@@ -2,7 +2,8 @@
 
 Web admin UI for managing MC servers
 
-HTTPS should be provided by a reverse proxy like Nginx or Apache mod_proxy
+HTTPS should be provided by a reverse proxy like Nginx or Apache mod_proxy,
+or you can modify the code to provide the SSL certs to uvicorn
 To use the UI only (not the API), SSH tunnelling is also ok.
 
 ## Run
