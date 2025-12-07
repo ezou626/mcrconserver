@@ -378,4 +378,5 @@ class RCONWorkerPool:
             msg = "Worker pool is shutting down"
             raise RuntimeError(msg)
 
+        LOGGER.debug("Queueing RCON command: %s", command)
         self._queue.put_nowait(command)
