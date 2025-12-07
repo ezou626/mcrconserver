@@ -13,7 +13,7 @@ class UserResponse(UserBase, BaseModel):
     """
 
 
-class APIKeyTableData(BaseModel):
+class APIKeyTableDataResponse(BaseModel):
     """Metadata for the API keys table paged responses.
 
     :param page: Current page number
@@ -34,14 +34,14 @@ class APIKeyTableData(BaseModel):
         limit: int,
         items: list[APIKeyInfo],
         total_count: int,
-    ) -> APIKeyTableData:
+    ) -> APIKeyTableDataResponse:
         """Create pagination info from query parameters.
 
         :param page: Current page number
         :param limit: Number of items per page
         :param items: List of API keys on the current page
         :param total_count: Total number of items
-        :return: APIKeyTableData instance
+        :return: APIKeyTableDataResponse instance
         """
         total_pages = (total_count + limit - 1) // limit
         return cls(
