@@ -263,7 +263,7 @@ class AuthQueries:
         """Generate a secure API key for the given username.
 
         :param user: The User object to generate the API key for
-        :rtype: str | None
+        :return: The generated API key as a string, or None if generation failed
         """
         username = user.username
         api_key = secrets.token_urlsafe(self.security_manager.api_key_length)
@@ -286,7 +286,7 @@ class AuthQueries:
         """Revoke the given API key.
 
         :param api_key: The API key to revoke
-        :rtype: int
+        :return: Number of rows deleted
         """
         async with self.connection as db:
             try:

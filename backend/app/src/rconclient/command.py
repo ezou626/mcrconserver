@@ -99,7 +99,6 @@ class RCONCommand:
 
         :param commands: The list of RCONCommands to sort
         :return: The sorted list of RCONCommands or None if a cycle is detected
-        :rtype: list[RCONCommand] | None
         :raises ValueError: If a cycle is detected in command dependencies
         """
         # Check for duplicates first

@@ -54,7 +54,6 @@ class SecurityManager:
         :param SecurityConfig config: Password validation configuration
         :return: An error message if the password does not meet requirements,
         None otherwise
-        :rtype: str | None
         """
         if len(password) >= self.passphrase_min_length:
             return None
@@ -67,7 +66,6 @@ class SecurityManager:
         :param password_config: Password validation configuration to use
         :return: A tuple of (username, password) if the account was created,
         None otherwise
-        :rtype: tuple[str, str] | None
         """
         username = input("Please enter the owner username: ")
         owner_password = None
@@ -93,7 +91,6 @@ class SecurityManager:
         :param User user: The User object for whom to create the token
         :param SecurityConfig jwt_config: JWT configuration to use
         :return: A JWT access token as a string
-        :rtype: str
         """
         expire = datetime.now(UTC) + timedelta(minutes=self.expire_minutes)
 
@@ -113,7 +110,6 @@ class SecurityManager:
         :param token: The JWT token string to verify
         :param jwt_config: JWT configuration to use
         :return: The User object if the token is valid, None otherwise
-        :rtype: User | None
         """
         try:
             payload = jwt.decode(

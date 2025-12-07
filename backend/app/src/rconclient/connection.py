@@ -202,8 +202,6 @@ class SocketClient:
 
         :param command: The RCON command to send
         :return: The response from the RCON server, or None if auth fails
-        :rtype: str | None
-
         :raises asyncio.TimeoutError: if the socket times out
         :raises ConnectionError: if the socket is no longer connected
         """
