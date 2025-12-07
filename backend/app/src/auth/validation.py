@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from app.src.common import Role, User
 
     from .queries import AuthQueries
-    from .security_manager import SecurityManager
 
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
@@ -28,7 +27,6 @@ class Validate:
     def __init__(
         self,
         auth_queries: AuthQueries,
-        security_manager: SecurityManager,
     ) -> None:
         """Create a new validator instance.
 
@@ -36,7 +34,7 @@ class Validate:
         :param security_manager: JWT security manager
         """
         self.auth_queries = auth_queries
-        self.security_manager = security_manager
+        self.security_manager = auth_queries.security_manager
 
     async def api_key(
         self,

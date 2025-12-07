@@ -136,7 +136,7 @@ def configure_auth_router(
     :return: The configured APIRouter
     """
     auth_queries = validate.auth_queries
-    security_manager = validate.security_manager
+    security_manager = auth_queries.security_manager
 
     @router.post("/login", response_model=LoginResponse)
     async def login(

@@ -11,11 +11,10 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from app.src.common import Role, User
 
 from .models import APIKeyInfo, APIKeyTableDataResponse
-from .validation import Validate
 
 if TYPE_CHECKING:
     from .queries import AuthQueries, KeyListOptions
-    from .security_manager import SecurityManager
+    from .validation import Validate
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -92,11 +91,10 @@ async def _revoke_api_key(
 
 def configure_key_router(
     router: APIRouter,
-    auth_queries: AuthQueries,
-    security_manager: SecurityManager,
+    validate: Validate,
 ) -> APIRouter:
     """Configure the authentication router."""
-    validate = Validate(auth_queries, security_manager)
+    auth_queries = validate.auth_queries
 
     @router.put("/api-key")
     async def create_api_key_route(
