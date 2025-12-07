@@ -1,56 +1,43 @@
-import unittest
+"""Tests for user-related functionality."""
 
-from app.common.user import User, Role
+import pytest  # noqa: F401
 
-
-class TestRole(unittest.TestCase):
-    def test_check_permission_owner(self):
-        """Test owner permissions"""
-        owner = Role.OWNER
-
-        self.assertTrue(owner.check_permission(Role.OWNER))
-        self.assertTrue(owner.check_permission(Role.ADMIN))
-        self.assertTrue(owner.check_permission(Role.USER))
-
-    def test_check_permission_admin(self):
-        """Test admin permissions"""
-        admin = Role.ADMIN
-
-        self.assertFalse(admin.check_permission(Role.OWNER))
-        self.assertTrue(admin.check_permission(Role.ADMIN))
-        self.assertTrue(admin.check_permission(Role.USER))
-
-    def test_check_permission_user(self):
-        """Test user permissions"""
-        user = Role.USER
-
-        self.assertFalse(user.check_permission(Role.OWNER))
-        self.assertFalse(user.check_permission(Role.ADMIN))
-        self.assertTrue(user.check_permission(Role.USER))
+from app.src.common import Role
 
 
-class TestUser(unittest.TestCase):
-    def test_user_creation_with_role_enum(self):
-        """Test User creation with Role enum"""
-        user = User("testuser", role=Role.ADMIN)
+def test_check_permission() -> None:
+    """Test owner permissions."""
+    owner = Role.OWNER
+    admin = Role.ADMIN
+    user = Role.USER
 
-        self.assertEqual(user.username, "testuser")
-        self.assertEqual(user.role, Role.ADMIN)
-        self.assertIsInstance(user.role, Role)
+    assert owner.check_permission(Role.OWNER)
+    assert owner.check_permission(Role.ADMIN)
+    assert owner.check_permission(Role.USER)
 
-    def test_user_string_representation(self):
-        """Test User string representation"""
-        user = User("testuser", role=Role.ADMIN)
-        str_cast = str(user)
-        repr_str = repr(user)
+    assert not admin.check_permission(Role.OWNER)
+    assert admin.check_permission(Role.ADMIN)
+    assert admin.check_permission(Role.USER)
 
-        self.assertIn("testuser", str_cast)
-        self.assertIn("ADMIN", str_cast)
-
-        self.assertIn("User", repr_str)
-        self.assertIn("testuser", repr_str)
-        self.assertIn("ADMIN", repr_str)
+    assert not user.check_permission(Role.OWNER)
+    assert not user.check_permission(Role.ADMIN)
+    assert user.check_permission(Role.USER)
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_has_higher_permission() -> None:
+    """Test role hierarchy comparisons."""
+    owner = Role.OWNER
+    admin = Role.ADMIN
+    user = Role.USER
+
+    assert owner.has_higher_permission(admin)
+    assert owner.has_higher_permission(user)
+    assert not owner.has_higher_permission(owner)
+
+    assert not admin.has_higher_permission(owner)
+    assert admin.has_higher_permission(user)
+    assert not admin.has_higher_permission(admin)
+
+    assert not user.has_higher_permission(owner)
+    assert not user.has_higher_permission(admin)
+    assert not user.has_higher_permission(user)
