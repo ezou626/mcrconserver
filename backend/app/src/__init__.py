@@ -43,7 +43,7 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
         LOGGER.info("Minecraft RCON Server API is starting")
 
         async with (
-            aiosqlite_connect(config.db_path) as db_connection,
+            aiosqlite_connect(config.database_path) as db_connection,
             worker_pool as pool,
         ):
             auth_queries = AuthQueries(db_connection, config.security_manager)
