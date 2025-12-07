@@ -64,12 +64,13 @@ def configure_command_router(
     router: APIRouter,
     pool: RCONWorkerPool,
     validate: Validate,
-) -> None:
+) -> APIRouter:
     """Configure the command router with necessary dependencies.
 
     :param router: The FastAPI APIRouter to configure
     :param pool: The RCONWorkerPool for queuing commands
     :param validate: The Validate instance for authentication and authorization
+    :return: The configured APIRouter
     """
 
     @router.post("/session/command")
@@ -109,3 +110,5 @@ def configure_command_router(
             return "Command queued successfully"
 
         return await _await_command_result(rcon_command)
+
+    return router
