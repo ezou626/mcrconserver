@@ -403,6 +403,8 @@ class RCONWorkerPool:
 
         :param commands: The list of commands to send to the Minecraft server
         :raises RuntimeError: If the worker pool is shutting down
+        :raises ValueError: If a cycle is detected in command dependencies
+            or duplicate IDs exist.
 
         **Example:**
 
