@@ -31,11 +31,13 @@ class SecurityConfig:
     DEFAULT_TOKEN_EXPIRE_MINUTES = 60 * 24
     DEFAULT_PASSPHRASE_MIN_LENGTH = 20
     MINIMUM_JWT_SECRET_KEY_LENGTH = 32
+    DEFAULT_API_KEY_LENGTH = 64
 
     secret_key: str | None = None
     algorithm: str = DEFAULT_JWT_ALGORITHM
     expire_minutes: int = DEFAULT_TOKEN_EXPIRE_MINUTES
     passphrase_min_length: int = DEFAULT_PASSPHRASE_MIN_LENGTH
+    api_key_length: int = DEFAULT_API_KEY_LENGTH
 
     def __post_init__(self) -> None:
         """Generate secret key if not provided."""
