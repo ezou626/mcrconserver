@@ -6,6 +6,8 @@ authentication-related queries.
 
 import logging
 import secrets
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import aiosqlite
@@ -15,10 +17,42 @@ from bcrypt import checkpw, gensalt, hashpw
 from app.src.common import Role, User
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from .security_manager import SecurityManager
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
+
+
+class ApiKeyOrderBy(StrEnum):
+    """Fields to order API key listings by."""
+
+    CREATED_AT = "created_at"
+    USERNAME = "username"
+    API_KEY = "api_key"
+
+
+@dataclass
+class KeyListOptions:
+    """Options for listing API keys.
+
+    :param user: Filter by specific user. If None, returns all API keys
+    :param page: Page number for pagination (1-based)
+    :param limit: Number of results per page
+    :param order_by: Field to order by
+    :param order_desc: Whether to order in descending order
+    :param created_after: Filter API keys created after this date (ISO format)
+    :param created_before: Filter API keys created before this date (ISO format)
+    """
+
+    user: User | None = None
+    page: int = 1
+    limit: int = 10
+    order_by: ApiKeyOrderBy | None = ApiKeyOrderBy.CREATED_AT
+    order_desc: bool = True
+    created_after: datetime | None = None
+    created_before: datetime | None = None
 
 
 class AuthQueries:
@@ -76,8 +110,8 @@ class AuthQueries:
     ) -> None:
         """Create an AuthQueries instance.
 
-        :param aiosqlite.Connection connection: Description
-        :param SecurityConfig security_config: Description
+        :param connection: Database connection
+        :param security_manager: Security configuration manager
         """
         self.connection = connection
         self.security_manager = security_manager
@@ -91,19 +125,14 @@ class AuthQueries:
         """Create an AuthQueries instance with an aiosqlite connection.
 
         :param db_path: Path to the SQLite database file
-        :type db_path: str
+        :param security_manager: Security configuration manager
         :return: Configured AuthQueries instance
-        :rtype: AuthQueries
         """
         connection = await aiosqlite.connect(db_path)
         return cls(connection, security_manager)
 
     async def close(self) -> None:
-        """Close the database connection.
-
-        :return: None
-        :rtype: None
-        """
+        """Close the database connection."""
         await self.connection.close()
 
     async def initialize_tables(self) -> None:
@@ -125,7 +154,6 @@ class AuthQueries:
         """Return the number of users in the users table.
 
         :return: Number of users
-        :rtype: int
         """
         async with self.connection as db:
             result = await db.execute(AuthQueries.COUNT_USERS)
@@ -136,11 +164,8 @@ class AuthQueries:
         """Retrieve user authentication info by username.
 
         :param username: The username of the user
-        :type username: str
         :param password: The plaintext password to verify
-        :type password: str
         :return: The User object if authentication is successful, None otherwise
-        :rtype: User | None
         """
         async with self.connection as db:
             result = await db.execute(AuthQueries.GET_USER_AUTH_INFO, (username,))
@@ -156,11 +181,8 @@ class AuthQueries:
         """Create a new user account with the given username, password, and role.
 
         :param user: The User object containing username and role
-        :type user: User
         :param password: The desired password
-        :type password: str
         :return: An error message if creation failed, None otherwise
-        :rtype: str | None
         """
         error = self.security_manager.validate_password(password)
         if error:
@@ -192,9 +214,7 @@ class AuthQueries:
         """Delete the user account with the given username.
 
         :param username: The username of the account to delete
-        :type username: str
         :return: Number of rows deleted
-        :rtype: int
         """
         async with self.connection as db:
             try:
@@ -211,11 +231,8 @@ class AuthQueries:
         """Change the password for the given username.
 
         :param username: The username to change the password for
-        :type username: str
         :param new_password: The new password
-        :type new_password: str
         :return: An error message if the password change failed, None otherwise
-        :rtype: str | None
         """
         error = self.security_manager.validate_password(new_password)
         if error:
@@ -248,7 +265,6 @@ class AuthQueries:
 
         :param user: The User object to generate the API key for
         :type user: User
-        :return: The generated API key, or None if generation failed
         :rtype: str | None
         """
         username = user.username
@@ -273,13 +289,13 @@ class AuthQueries:
 
         :param api_key: The API key to revoke
         :type api_key: str
-        :return: Number of rows deleted
         :rtype: int
         """
         async with self.connection as db:
             try:
                 result = await db.execute(
-                    "DELETE FROM api_keys WHERE api_key = ?", (api_key,)
+                    "DELETE FROM api_keys WHERE api_key = ?",
+                    (api_key,),
                 )
                 await db.commit()
             except Exception:
@@ -289,90 +305,81 @@ class AuthQueries:
             else:
                 return result.rowcount if result else 0
 
-    async def list_api_keys(
+    def _build_filters(
         self,
-        username: str | None = None,
-        page: int = 1,
-        limit: int = 10,
-        order_by: str = "created_at",
-        order_desc: bool = True,
-        created_after: str | None = None,
-        created_before: str | None = None,
-    ) -> tuple[list[tuple], int]:
-        """List API keys with optional filtering and pagination.
+        options: KeyListOptions,
+    ) -> tuple[str, list]:
+        where = []
+        params = []
 
-        :param username: Filter by specific username. If None, returns all API keys
-        :type username: str | None
-        :param page: Page number for pagination (1-based)
-        :type page: int
-        :param limit: Number of results per page
-        :type limit: int
-        :param order_by: Field to order by ('created_at', 'username', 'api_key')
-        :type order_by: str
-        :param order_desc: Whether to order in descending order
-        :type order_desc: bool
-        :param created_after: Filter API keys created after this date (ISO format)
-        :type created_after: str | None
-        :param created_before: Filter API keys created before this date (ISO format)
-        :type created_before: str | None
-        :return: (api_keys, total_count) where api_keys is list of tuples.
-                If username is provided: [(api_key, created_at), ...]
-                If username is None: [(api_key, username, created_at), ...]
-        :rtype: tuple[list[tuple], int]
+        if options.user is not None:
+            where.append("username = ?")
+            params.append(options.user.username)
+
+        if options.created_after:
+            where.append("created_at > ?")
+            params.append(options.created_after.isoformat())
+        if options.created_before:
+            where.append("created_at < ?")
+            params.append(options.created_before.isoformat())
+
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
+        return clause, params
+
+    async def _count_api_keys(self, where_clause: str, params: list) -> int:
+        # No SQL injection because user inputs are parameterized
+        query = f"SELECT COUNT(*) FROM api_keys{where_clause}"  # noqa: S608
+        result = await self.connection.execute(query, params)
+        row = await result.fetchone()
+        return row[0] if row else 0
+
+    async def _select_api_keys(
+        self,
+        options: KeyListOptions,
+        where_clause: str,
+        params: list,
+    ) -> list[tuple]:
+        offset = (options.page - 1) * options.limit
+
+        order_clause = " "
+        if options.order_by:
+            ordering = "DESC" if options.order_desc else "ASC"
+            order_clause = f" ORDER BY {options.order_by} {ordering}"
+
+        # where clause is built safely in _build_filters, order_by is enum-validated
+        query = (
+            f"SELECT api_key, username, created_at FROM api_keys"  # noqa: S608
+            f"{where_clause}{order_clause} "
+            f"LIMIT ? OFFSET ?"
+        )
+
+        result = await self.connection.execute(query, [*params, options.limit, offset])
+        rows = await result.fetchall()
+        return [tuple(r) for r in rows]
+
+    async def list_api_keys(self, options: KeyListOptions) -> tuple[list[tuple], int]:
+        """List API keys based on the given options.
+
+        :param options: Options for filtering and pagination
+        :return: Tuple of (list of API key tuples, total count)
         """
-        async with self.connection as db:
-            where_conditions = []
-            params = []
+        where_clause, params = self._build_filters(options)
+        total = await self._count_api_keys(where_clause, params)
+        if total == 0:
+            return [], 0
+        rows = await self._select_api_keys(
+            options,
+            where_clause,
+            params,
+        )
 
-            if username is not None:
-                where_conditions.append("username = ?")
-                params.append(username)
-
-            if created_after is not None:
-                where_conditions.append("created_at > ?")
-                params.append(created_after)
-
-            if created_before is not None:
-                where_conditions.append("created_at < ?")
-                params.append(created_before)
-
-            where_clause = (
-                " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
-            )
-
-            # Validate order_by field
-            valid_order_fields = {"created_at", "username", "api_key"}
-            if order_by not in valid_order_fields:
-                order_by = "created_at"
-
-            order_direction = "DESC" if order_desc else "ASC"
-
-            # No SQL injection because we validate order_by above
-            count_query = f"SELECT COUNT(*) FROM api_keys{where_clause}"  # noqa: S608
-            result = await db.execute(count_query, params)
-            count_row = await result.fetchone()
-            total_count = count_row[0] if count_row else 0
-
-            offset = (page - 1) * limit
-
-            if username is not None:
-                select_fields = "api_key, created_at"
-            else:
-                select_fields = "api_key, username, created_at"
-
-            query = f"SELECT {select_fields} FROM api_keys{where_clause} ORDER BY {order_by} {order_direction} LIMIT ? OFFSET ?"
-            result = await db.execute(query, [*params, limit, offset])
-            rows = await result.fetchall()
-
-            return [tuple(row) for row in rows], total_count
+        return rows, total
 
     async def get_user_by_api_key(self, api_key: str) -> User | None:
         """Get user by API key.
 
         :param api_key: The API key to look up
-        :type api_key: str
         :return: The User object if API key is valid, None otherwise
-        :rtype: User | None
         """
         async with self.connection as db:
             result = await db.execute(AuthQueries.GET_USER_BY_API_KEY, (api_key,))
