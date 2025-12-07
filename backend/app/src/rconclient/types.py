@@ -7,7 +7,7 @@ from enum import IntEnum
 from dataclasses import dataclass, field
 from asyncio import Future, get_event_loop
 
-from app.common.user import User
+from app.src.common import User
 
 
 class RCONPacketType(IntEnum):
