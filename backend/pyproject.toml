@@ -22,3 +22,6 @@ dev = [
 
 [tool.ruff.lint]
 select = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["F401", "S101"]
