@@ -40,12 +40,12 @@ uv run python -m app --env-file .env --host X.X.X.X --port 8000
 
 ## Test
 
-This project uses the built-in unittest framework. Tests live under `tests/` and automatically isolate a temporary SQLite database per test.
+This project uses the pytest framework. Tests live under `tests/`.
 
 Using uv (recommended):
 
 ```bash
-uv run -m unittest -v
+uv run pytest -v
 ```
 
 Notes:
