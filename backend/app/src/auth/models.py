@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from app.src.common import UserBase
+from app.src.common import Role, UserBase
 
 
 class UserResponse(UserBase, BaseModel):
@@ -11,6 +11,18 @@ class UserResponse(UserBase, BaseModel):
     :param str username: The username of the user
     :param int role: The role of the user
     """
+
+    username: str
+    role: Role
+
+    @classmethod
+    def from_user(cls, user: UserBase) -> UserResponse:
+        """Create UserResponse from UserBase.
+
+        :param user: UserBase instance
+        :return: UserResponse instance
+        """
+        return UserResponse(username=user.username, role=user.role)
 
 
 class APIKeyTableDataResponse(BaseModel):
