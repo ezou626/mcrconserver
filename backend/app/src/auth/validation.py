@@ -6,10 +6,12 @@ from typing import TYPE_CHECKING
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
+from app.src.common import User  # noqa: TC001
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from app.src.common import Role, User
+    from app.src.common import Role
 
     from .queries import AuthQueries
 

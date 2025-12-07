@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from app.src.common import Role, User
 
 from .models import APIKeyInfo, APIKeyTableDataResponse
+from .queries import KeyListOptions  # runtime and pydantic dependency
 
 if TYPE_CHECKING:
     from .queries import AuthQueries, KeyListOptions
@@ -113,7 +114,7 @@ def configure_key_router(
     @router.get("/api-keys")
     async def list_api_keys_route(
         user: Annotated[User, Depends(validate.role(Role.ADMIN))],
-        options: KeyListOptions,
+        options: Annotated[KeyListOptions, Depends()],
     ) -> APIKeyTableDataResponse:
         items, total_count = await _list_api_keys(user, options, auth_queries)
         return APIKeyTableDataResponse.from_query_params(
