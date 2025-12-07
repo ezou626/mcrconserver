@@ -1,5 +1,6 @@
 """FastAPI dependency validators for authentication and authorization."""
 
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Security, status
@@ -16,6 +17,9 @@ if TYPE_CHECKING:
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 bearer_scheme = HTTPBearer(auto_error=True)
+
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 
 class Validate:
@@ -41,10 +45,12 @@ class Validate:
         """Validate an API key using the injected AuthQueries."""
         user = await self.auth_queries.get_user_by_api_key(api_key)
         if not user:
+            LOGGER.debug("API key validation failed for key: %s", api_key)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid API key",
             )
+        LOGGER.debug("API key validated for user: %s", user.username)
         return user
 
     def jwt_token(
@@ -56,12 +62,14 @@ class Validate:
         user = self.security_manager.verify_token(token)
 
         if not user:
+            LOGGER.debug("JWT token validation failed for token: %s", token)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        LOGGER.debug("JWT token validated for user: %s", user.username)
         return user
 
     def role(self, required_role: Role) -> Callable[..., User]:
@@ -69,7 +77,9 @@ class Validate:
 
         def validator(user: User = Depends(self.jwt_token)) -> User:  # noqa: B008
             if not user.role.check_permission(required_role):
+                LOGGER.debug("Role validation failed for user: %s", user.username)
                 raise HTTPException(status_code=403, detail="Forbidden")
+            LOGGER.debug("Role validated for user: %s", user.username)
             return user
 
         return validator
