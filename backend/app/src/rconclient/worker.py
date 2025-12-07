@@ -13,10 +13,15 @@ timing requirements (when the rest of the app exits, for example).
 **Example Usage:**
 
 .. code-block:: python
-
-    async with RCONWorkerPool(password="mypassword") as pool:
-        command = RCONCommand("say Hello World", user=None)
-        command.result = asyncio.get_event_loop().create_future()
+    # can wrap a whole FastAPI app with lifespan context manager
+    async with RCONWorkerPool(config) as pool:
+        result = asyncio.get_event_loop().create_future()
+        command = RCONCommand(
+            "say Hello World",
+            user=user,
+            command_id=1,
+            result=result,
+        )
         await pool.queue_command(command)
         result = await command.get_command_result()
 """
