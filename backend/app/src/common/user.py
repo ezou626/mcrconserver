@@ -1,4 +1,4 @@
-"""Fundamental user data model for app"""
+"""Fundamental user data model for app."""
 
 from dataclasses import dataclass
 from enum import IntEnum
@@ -11,7 +11,12 @@ class Role(IntEnum):
     ADMIN = 1
     USER = 2
 
-    def check_permission(self, required_role: "Role") -> bool:
+    def check_permission(self, required_role: Role) -> bool:
+        """Check if the current role has permission for the required role.
+
+        :param required_role: Description
+        :return: True if the current role has permission, False otherwise
+        """
         return self.value <= required_role.value
 
 
