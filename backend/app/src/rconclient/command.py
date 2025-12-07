@@ -91,7 +91,7 @@ class RCONCommand:
         return None
 
     @staticmethod
-    def topological_sort(commands: list[RCONCommand]) -> list[RCONCommand] | None:
+    def topological_sort(commands: list[RCONCommand]) -> list[RCONCommand]:
         """Sorts commands using topological ordering, with sources first.
 
         .. note::
@@ -99,12 +99,14 @@ class RCONCommand:
 
         :param commands: The list of RCONCommands to sort
         :return: The sorted list of RCONCommands or None if a cycle is detected
-        :raises ValueError: If a cycle is detected in command dependencies
+        :raises ValueError: If a cycle is detected in command
+            dependencies or duplicate IDs exist.
         """
         # Check for duplicates first
         command_ids = [cmd.command_id for cmd in commands]
         if len(set(command_ids)) != len(command_ids):
-            return None
+            msg = "Duplicate command IDs detected"
+            raise ValueError(msg)
 
         sorted_commands = []
         finished = set()

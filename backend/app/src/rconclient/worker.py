@@ -31,13 +31,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Self
 
+from .command import RCONCommand
 from .connection import SocketClient, SocketClientConfig
 from .rcon_exceptions import RCONClientIncorrectPasswordError
 
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from .command import RCONCommand
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -390,3 +390,44 @@ class RCONWorkerPool:
 
         LOGGER.debug("Queueing RCON command: %s", command)
         self._queue.put_nowait(command)
+
+    async def queue_job(
+        self,
+        commands: list[RCONCommand],
+    ) -> None:
+        """Queue multiple commands for processing.
+
+        The commands will be processed by the available workers.
+        If the commands have result Futures, the caller can await
+        :meth:`command.get_command_result()` to get the responses.
+
+        :param commands: The list of commands to send to the Minecraft server
+        :raises RuntimeError: If the worker pool is shutting down
+
+        **Example:**
+
+        .. code-block:: python
+
+            commands = [
+                RCONCommand("say Hello", user=None),
+                RCONCommand("list", user=None),
+            ]
+            for command in commands:
+                command.result = asyncio.get_event_loop().create_future()
+            await pool.queue_job(commands)
+            for command in commands:
+                response = await command.get_command_result()
+        """
+        if self.state.pool_should_shutdown:
+            msg = "Worker pool is shutting down"
+            raise RuntimeError(msg)
+
+        try:
+            sorted_commands = RCONCommand.topological_sort(commands)
+        except ValueError as e:
+            msg = "Failed to sort commands for job due to cycle or duplicate IDs"
+            LOGGER.exception(msg)
+            raise ValueError(msg) from e
+        for command in sorted_commands:
+            LOGGER.debug("Queueing RCON command: %s", command)
+            self._queue.put_nowait(command)
