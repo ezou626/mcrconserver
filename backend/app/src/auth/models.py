@@ -1,60 +1,76 @@
-from __future__ import annotations
+"""Models for auth-related responses."""
+
 from pydantic import BaseModel
 
+from app.src.common import UserBase
 
-class PaginationInfo(BaseModel):
+
+class User(UserBase, BaseModel):
+    """Data structure representing a user.
+
+    :param str username: The username of the user
+    :param int role: The role of the user
+    """
+
+
+class APIKeyTableData(BaseModel):
+    """Metadata for the API keys table paged responses.
+
+    :param page: Current page number
+    :param items: List of API keys on the current page
+    :param total_count: Total number of items
+    :param total_pages: Total number of pages
+    """
+
     page: int
-    limit: int
+    items: list[APIKeyInfo]
     total_count: int
     total_pages: int
-    has_next: bool
-    has_prev: bool
 
     @classmethod
     def from_query_params(
-        cls, page: int, limit: int, total_count: int
-    ) -> PaginationInfo:
-        """Helper function to create pagination info from query parameters
+        cls,
+        page: int,
+        limit: int,
+        items: list[APIKeyInfo],
+        total_count: int,
+    ) -> APIKeyTableData:
+        """Create pagination info from query parameters.
 
-        Args:
-            page: Current page number
-            limit: Number of items per page
-            total_count: Total number of items
-
-        Returns:
-            PaginationInfo instance
+        :param page: Current page number
+        :param limit: Number of items per page
+        :param items: List of API keys on the current page
+        :param total_count: Total number of items
+        :return: APIKeyTableData instance
         """
         total_pages = (total_count + limit - 1) // limit
         return cls(
             page=page,
-            limit=limit,
+            items=items,
             total_count=total_count,
             total_pages=total_pages,
-            has_next=page < total_pages,
-            has_prev=page > 1,
         )
 
 
-class ApiKeyInfo(BaseModel):
+class APIKeyInfo(BaseModel):
+    """Individual API key information.
+
+    :param str api_key: The API key string
+    :param str created_at: The creation timestamp of the API key
+    :param str username: The username of the user who owns the API key
+    """
+
     api_key: str
     created_at: str
-
-
-class ApiKeyWithUser(ApiKeyInfo):
     username: str
 
 
 class LoginResponse(BaseModel):
+    """Response model for login requests.
+
+    :param str access_token: The JWT access token
+    :param User user: The authenticated user information
+    """
+
     access_token: str
-    token_type: str = "bearer"
-    username: str
-    role: int
-
-
-class AccountInfo(BaseModel):
-    username: str
-    role: int
-
-
-class MessageResponse(BaseModel):
-    message: str
+    user: User
