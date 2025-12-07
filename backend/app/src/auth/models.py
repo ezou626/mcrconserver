@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from app.src.common import UserBase
 
 
-class User(UserBase, BaseModel):
+class UserResponse(UserBase, BaseModel):
     """Data structure representing a user.
 
     :param str username: The username of the user
@@ -55,9 +55,9 @@ class APIKeyTableData(BaseModel):
 class APIKeyInfo(BaseModel):
     """Individual API key information.
 
-    :param str api_key: The API key string
-    :param str created_at: The creation timestamp of the API key
-    :param str username: The username of the user who owns the API key
+    :param api_key: The API key string
+    :param created_at: The creation timestamp of the API key
+    :param username: The username of the user who owns the API key
     """
 
     api_key: str
@@ -68,9 +68,9 @@ class APIKeyInfo(BaseModel):
 class LoginResponse(BaseModel):
     """Response model for login requests.
 
-    :param str access_token: The JWT access token
-    :param User user: The authenticated user information
+    :param access_token: The JWT access token
+    :param user: The authenticated user information
     """
 
     access_token: str
-    user: User
+    user: UserResponse
