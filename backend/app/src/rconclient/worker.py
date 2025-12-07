@@ -153,6 +153,9 @@ async def _worker(
     while not state.worker_should_shutdown:
         try:
             command = await queue.get()
+            await asyncio.gather(
+                *(dep.completion.wait() for dep in command.dependencies),
+            )
             response = await client.send_command(command.command)
             queue.task_done()
 
