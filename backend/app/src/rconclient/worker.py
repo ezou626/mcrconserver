@@ -32,14 +32,17 @@ timing requirements (when the rest of the app exits, for example).
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import logging
-from typing import Any, ClassVar
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, ClassVar, Self
 
-from .types import RCONCommand
 from .connection import SocketClient
+from .rcon_exceptions import RCONClientIncorrectPasswordError
 
-from .rcon_exceptions import RCONClientIncorrectPassword
+if TYPE_CHECKING:
+    from types import TracebackType
+
+    from .types import RCONCommand
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -52,23 +55,24 @@ class RCONWorkerPoolConfig:
     :cvar NO_TIMEOUT: Constant indicating indefinite waiting for phase completion
     :cvar DISABLE: Constant indicating the phase should be skipped
 
-    :param str password: RCON server password for authentication
-    :param int port: RCON server port
-    :param float socket_timeout: Socket timeout in seconds
-    :param int worker_count: Number of concurrent workers
-    :param float reconnect_pause: Seconds to wait between reconnection attempts
+    :param password: RCON server password for authentication
+    :param port: RCON server port
+    :param socket_timeout: Socket timeout in seconds
+    :param worker_count: Number of concurrent workers
+    :param reconnect_pause: Seconds to wait between reconnection attempts
 
-    :param int | None grace_period: Seconds to wait for remaining queue items to process.
-                        Set to DISABLE to skip graceful processing.
-                        Set to NO_TIMEOUT for indefinite wait.
+    :param grace_period: Seconds to wait for remaining queue items to process.
+        Set to DISABLE to skip graceful processing.
+        Set to NO_TIMEOUT for indefinite wait.
 
-    :param int | None queue_clear_period: Seconds to wait while clearing remaining queue items with errors.
-                              Set to DISABLE to skip this phase.
-                              Set to NO_TIMEOUT for indefinite wait.
+    :param queue_clear_period: Seconds to wait while clearing remaining queue items
+        with errors.
+        Set to DISABLE to skip this phase.
+        Set to NO_TIMEOUT for indefinite wait.
 
-    :param int | None await_shutdown_period: Seconds to wait for workers to shut down gracefully.
-                                 Set to DISABLE for immediate cancellation.
-                                 Set to NO_TIMEOUT for indefinite wait.
+    :param await_shutdown_period: Seconds to wait for workers to shut down gracefully.
+        Set to DISABLE for immediate cancellation.
+        Set to NO_TIMEOUT for indefinite wait.
     """
 
     NO_TIMEOUT: ClassVar[None] = None
@@ -116,7 +120,7 @@ async def _worker(
     queue: asyncio.Queue[RCONCommand],
     state: RCONWorkerPoolState,
 ) -> None:
-    """Main loop for a worker task.
+    """Process items from the RCON command queue.
 
     Processes commands from the queue until shutdown is requested.
     Handles connection errors gracefully by reconnecting.
@@ -130,7 +134,7 @@ async def _worker(
     :param state: Runtime state object for checking shutdown signals
     :type state: RCONWorkerPoolState
     """
-    LOGGER.info(f"Worker {worker_id}: Starting")
+    LOGGER.info("Worker %d: Starting", worker_id)
 
     while not state.worker_should_shutdown:
         try:
@@ -144,9 +148,10 @@ async def _worker(
             else:
                 command.set_command_result(response)
 
-        except (TimeoutError, ConnectionError) as e:
-            LOGGER.warning(
-                f"Worker {worker_id}: Connection error ({e}), reconnecting..."
+        except (TimeoutError, ConnectionError):
+            LOGGER.exception(
+                "Worker %d: Connection error, reconnecting...",
+                worker_id,
             )
             await client.reconnect()
             continue
@@ -157,7 +162,7 @@ async def _worker(
 
     _fail_remaining_commands(queue)
 
-    LOGGER.info(f"Worker {worker_id}: Shutdown complete")
+    LOGGER.info("Worker %d: Shutdown complete", worker_id)
 
 
 class RCONWorkerPool:
@@ -214,14 +219,24 @@ class RCONWorkerPool:
         self._workers: list[asyncio.Task[None]] = []
         self.clients: list[SocketClient] = []  # Make this accessible for debugging
 
-    async def __aenter__(self) -> RCONWorkerPool:
+    async def __aenter__(self) -> Self:
         """Start the worker pool and wait for all workers to connect."""
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Shutdown the worker pool gracefully.
+
+        :param exc_type: Type of exception if raised within context
+        :param exc_val: Exception value if raised within context
+        :param exc_tb: Description of traceback if exception raised
+        """
         await self.shutdown()
-        return
 
     async def connect(self) -> None:
         """Start the worker pool and wait for all workers to connect.
@@ -230,15 +245,17 @@ class RCONWorkerPool:
         :raises TimeoutError: If any worker times out during connection
         :raises ConnectionError: If any worker fails to connect
         """
-
         if self.config is None:
-            raise ValueError("RCONWorkerPool configuration must be provided")
+            msg = "RCONWorkerPool configuration must be provided"
+            raise ValueError(msg)
 
         if self.config.password is None:
-            raise RCONClientIncorrectPassword("Password must be provided")
+            msg = "Password must be provided"
+            raise RCONClientIncorrectPasswordError(msg)
 
         LOGGER.info(
-            f"Starting RCON worker pool with {self.config.worker_count} workers"
+            "Starting RCON worker pool with %s workers",
+            self.config.worker_count,
         )
 
         socket_clients = [
@@ -253,12 +270,15 @@ class RCONWorkerPool:
 
         try:
             self.clients = await asyncio.gather(*socket_clients)
-        except RCONClientIncorrectPassword as e:
-            raise RCONClientIncorrectPassword(
-                "One or more workers failed to authenticate"
+        except RCONClientIncorrectPasswordError as e:
+            msg = "One or more workers failed to authenticate"
+            LOGGER.exception(msg)
+            raise RCONClientIncorrectPasswordError(
+                msg,
             ) from e
-        except (TimeoutError, ConnectionError) as e:
-            raise e
+        except (TimeoutError, ConnectionError):
+            LOGGER.exception("One or more workers failed to connect")
+            raise
 
         self._workers = [
             asyncio.create_task(_worker(i, client, self._queue, self.state))
@@ -267,57 +287,11 @@ class RCONWorkerPool:
 
         LOGGER.info("All RCON workers connected successfully")
 
-    async def _await_workers_shutdown(self) -> bool:
-        """Wait for workers to shut down gracefully.
-
-        :return: True if workers shut down within timeout, False otherwise
-        :rtype: bool
-        """
-
-        if self.config is None:
-            raise ValueError("RCONWorkerPool configuration must be provided")
-
-        timeout = self.config.await_shutdown_period
-
-        # Handle DISABLE case
-        if timeout == RCONWorkerPoolConfig.DISABLE:
-            return False
-
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*self._workers, return_exceptions=True), timeout
-            )
-            return True
-        except asyncio.TimeoutError:
-            return False
-
     async def _cancel_workers(self) -> None:
         """Cancel all worker tasks and wait for them to finish."""
         for worker in self._workers:
             worker.cancel()
         await asyncio.gather(*self._workers, return_exceptions=True)
-
-    async def _wait_for_queue_with_timeout(
-        self, timeout: int | None, phase_name: str
-    ) -> bool:
-        """Wait for queue to finish with optional timeout.
-
-        :param timeout: Timeout in seconds, or None for no timeout
-        :type timeout: int | None
-        :param phase_name: Name of the phase for logging
-        :type phase_name: str
-        :return: True if completed within timeout, False if timed out
-        :rtype: bool
-        """
-        if timeout == RCONWorkerPoolConfig.DISABLE:
-            return False
-
-        try:
-            await asyncio.wait_for(self._queue.join(), timeout)
-            return True
-        except asyncio.TimeoutError:
-            LOGGER.debug(f"Timeout during {phase_name} phase")
-            return False
 
     async def shutdown(self) -> None:
         """Shutdown the worker pool gracefully.
@@ -329,38 +303,57 @@ class RCONWorkerPool:
         4. Wait for workers to shut down gracefully
         5. Force cancel workers if needed
         """
-
         if self.config is None:
-            raise ValueError("RCONWorkerPool configuration must be provided")
+            msg = "RCONWorkerPool configuration must be provided"
+            raise ValueError(msg)
 
         LOGGER.info("Shutting down RCON worker pool")
         self.state.pool_should_shutdown = True
 
         # grace period - let current work finish
-        if await self._wait_for_queue_with_timeout(
-            self.config.grace_period, "grace period"
-        ):
-            if await self._await_workers_shutdown():
-                LOGGER.info("RCON worker pool shut down gracefully")
-                return
+        if self.config.grace_period != RCONWorkerPoolConfig.DISABLE:
+            try:
+                await asyncio.wait_for(
+                    self._queue.join(),
+                    timeout=self.config.grace_period,
+                )
+            except TimeoutError:
+                LOGGER.warning(
+                    "Grace period expired with %d items remaining in queue",
+                    self._queue.qsize(),
+                )
 
         # queue clear period - fail remaining items
         self.state.worker_should_shutdown = True
-        if await self._wait_for_queue_with_timeout(
-            self.config.queue_clear_period, "queue clear"
-        ):
-            if await self._await_workers_shutdown():
-                LOGGER.info("RCON worker pool shut down after clearing queue")
-                return
+        if self.config.queue_clear_period != RCONWorkerPoolConfig.DISABLE:
+            try:
+                await asyncio.wait_for(
+                    self._queue.join(),
+                    timeout=self.config.queue_clear_period,
+                )
+            except TimeoutError:
+                LOGGER.warning(
+                    "Queue clear period expired with %d items remaining in queue",
+                    self._queue.qsize(),
+                )
 
         # force shutdown
         self._queue.shutdown(immediate=True)
 
         # final cleanup - cancel workers if they haven't stopped
-        if not await self._await_workers_shutdown():
-            await self._cancel_workers()
+        if self.config.await_shutdown_period != RCONWorkerPoolConfig.DISABLE:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self._workers, return_exceptions=True),
+                    timeout=self.config.await_shutdown_period,
+                )
+            except TimeoutError:
+                LOGGER.warning("Worker shutdown period expired, cancelling workers")
 
-        LOGGER.info("RCON worker pool forcibly shut down")
+        for worker in self._workers:
+            worker.cancel()
+        await asyncio.gather(*self._workers, return_exceptions=True)
+        LOGGER.info("RCON worker pool shutdown complete")
 
     async def queue_command(self, command: RCONCommand) -> None:
         """Queue a single command for processing.
@@ -383,6 +376,7 @@ class RCONWorkerPool:
             response = await command.get_command_result()
         """
         if self.state.pool_should_shutdown:
-            raise RuntimeError("Worker pool is shutting down")
+            msg = "Worker pool is shutting down"
+            raise RuntimeError(msg)
 
         self._queue.put_nowait(command)
