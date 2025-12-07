@@ -11,11 +11,11 @@ from fastapi import APIRouter, Depends, Form, HTTPException, status
 from app.src.common import Role, User
 
 from .models import LoginResponse, UserResponse
-from .validation import Validate
 
 if TYPE_CHECKING:
     from .queries import AuthQueries
     from .security_manager import SecurityManager
+    from .validation import Validate
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -126,8 +126,7 @@ async def _change_password(
 
 def configure_auth_router(
     router: APIRouter,
-    auth_queries: AuthQueries,
-    security_manager: SecurityManager,
+    validate: Validate,
 ) -> APIRouter:
     """Configure the authentication router.
 
@@ -136,7 +135,8 @@ def configure_auth_router(
     :param security_manager: The SecurityManager instance for JWT operations
     :return: The configured APIRouter
     """
-    validate = Validate(auth_queries, security_manager)
+    auth_queries = validate.auth_queries
+    security_manager = validate.security_manager
 
     @router.post("/login", response_model=LoginResponse)
     async def login(
