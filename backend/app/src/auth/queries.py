@@ -4,17 +4,18 @@ Using the AuthQueries class as a repository for
 authentication-related queries.
 """
 
-import secrets
 import logging
+import secrets
+from typing import TYPE_CHECKING
 
 import aiosqlite
 from aiosqlite import Connection
 from bcrypt import checkpw, gensalt, hashpw
 
-from app.src.common import User, Role
-from .utils import password_requirements
+from app.src.common import Role, User
 
-API_KEY_LENGTH = 128
+if TYPE_CHECKING:
+    from .security_manager import SecurityManager
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
@@ -62,17 +63,31 @@ class AuthQueries:
 
     UPDATE_USER_PASSWORD = """
         UPDATE users SET hashed_password = ?, salt = ? WHERE username = ?
-        """
+        """  # noqa: S105
 
     DELETE_USER = """
         DELETE FROM users WHERE username = ?;
         """
 
-    def __init__(self, connection: Connection) -> None:
+    def __init__(
+        self,
+        connection: Connection,
+        security_manager: SecurityManager,
+    ) -> None:
+        """Create an AuthQueries instance.
+
+        :param aiosqlite.Connection connection: Description
+        :param SecurityConfig security_config: Description
+        """
         self.connection = connection
+        self.security_manager = security_manager
 
     @classmethod
-    async def create(cls, db_path: str) -> "AuthQueries":
+    async def create(
+        cls,
+        db_path: str,
+        security_manager: SecurityManager,
+    ) -> AuthQueries:
         """Create an AuthQueries instance with an aiosqlite connection.
 
         :param db_path: Path to the SQLite database file
@@ -81,7 +96,7 @@ class AuthQueries:
         :rtype: AuthQueries
         """
         connection = await aiosqlite.connect(db_path)
-        return cls(connection)
+        return cls(connection, security_manager)
 
     async def close(self) -> None:
         """Close the database connection.
@@ -102,9 +117,9 @@ class AuthQueries:
                 await db.execute(AuthQueries.CREATE_USERS_TABLE)
                 await db.execute(AuthQueries.CREATE_API_KEYS_TABLE)
                 await db.commit()
-            except Exception as e:
+            except Exception:
                 await self.connection.rollback()
-                LOGGER.error(f"Error initializing tables: {e}")
+                LOGGER.exception("Error initializing tables")
 
     async def count_users(self) -> int:
         """Return the number of users in the users table.
@@ -147,14 +162,15 @@ class AuthQueries:
         :return: An error message if creation failed, None otherwise
         :rtype: str | None
         """
-        error = password_requirements(password)
+        error = self.security_manager.validate_password(password)
         if error:
             return error
 
         async with self.connection as db:
             try:
                 result = await db.execute(
-                    AuthQueries.GET_USER_WITH_USERNAME, (user.username,)
+                    AuthQueries.GET_USER_WITH_USERNAME,
+                    (user.username,),
                 )
                 existing_user = await result.fetchone()
                 if existing_user is not None:
@@ -167,10 +183,9 @@ class AuthQueries:
                     (user.username, hashed_password, salt, user.role),
                 )
                 await db.commit()
-                return None
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                LOGGER.error(f"Error creating account for {user.username}: {e}")
+                LOGGER.exception("Error creating account for %s", user.username)
                 return "Failed to create account"
 
     async def delete_account(self, username: str) -> int:
@@ -185,11 +200,12 @@ class AuthQueries:
             try:
                 result = await db.execute(AuthQueries.DELETE_USER, (username,))
                 await db.commit()
-                return result.rowcount if result else 0
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                LOGGER.error(f"Error deleting account {username}: {e}")
+                LOGGER.exception("Error deleting account %s", username)
                 return 0
+            else:
+                return result.rowcount if result else 0
 
     async def change_password(self, username: str, new_password: str) -> str | None:
         """Change the password for the given username.
@@ -201,14 +217,15 @@ class AuthQueries:
         :return: An error message if the password change failed, None otherwise
         :rtype: str | None
         """
-        error = password_requirements(new_password)
+        error = self.security_manager.validate_password(new_password)
         if error:
             return error
 
         async with self.connection as db:
             try:
                 result = await db.execute(
-                    AuthQueries.GET_USER_WITH_USERNAME, (username,)
+                    AuthQueries.GET_USER_WITH_USERNAME,
+                    (username,),
                 )
                 user_exists = await result.fetchone()
                 if user_exists is None:
@@ -221,10 +238,9 @@ class AuthQueries:
                     (hashed_password, salt, username),
                 )
                 await db.commit()
-                return None
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                LOGGER.error(f"Error changing password for {username}: {e}")
+                LOGGER.exception("Error changing password for %s", username)
                 return "Failed to change password"
 
     async def generate_api_key(self, user: User) -> str | None:
@@ -236,7 +252,7 @@ class AuthQueries:
         :rtype: str | None
         """
         username = user.username
-        api_key = secrets.token_urlsafe(API_KEY_LENGTH)
+        api_key = secrets.token_urlsafe(self.security_manager.api_key_length)
 
         async with self.connection as db:
             try:
@@ -245,11 +261,12 @@ class AuthQueries:
                     (api_key, username),
                 )
                 await db.commit()
-                return api_key
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                LOGGER.error(f"Error generating API key for {username}: {e}")
+                LOGGER.exception("Error generating API key for %s", username)
                 return None
+            else:
+                return api_key
 
     async def revoke_api_key(self, api_key: str) -> int:
         """Revoke the given API key.
@@ -265,11 +282,12 @@ class AuthQueries:
                     "DELETE FROM api_keys WHERE api_key = ?", (api_key,)
                 )
                 await db.commit()
-                return result.rowcount if result else 0
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                LOGGER.error(f"Error revoking API key: {e}")
+                LOGGER.exception("Error revoking API key %s", api_key)
                 return 0
+            else:
+                return result.rowcount if result else 0
 
     async def list_api_keys(
         self,
@@ -329,8 +347,8 @@ class AuthQueries:
 
             order_direction = "DESC" if order_desc else "ASC"
 
-            # Get total count
-            count_query = f"SELECT COUNT(*) FROM api_keys{where_clause}"
+            # No SQL injection because we validate order_by above
+            count_query = f"SELECT COUNT(*) FROM api_keys{where_clause}"  # noqa: S608
             result = await db.execute(count_query, params)
             count_row = await result.fetchone()
             total_count = count_row[0] if count_row else 0
@@ -343,7 +361,7 @@ class AuthQueries:
                 select_fields = "api_key, username, created_at"
 
             query = f"SELECT {select_fields} FROM api_keys{where_clause} ORDER BY {order_by} {order_direction} LIMIT ? OFFSET ?"
-            result = await db.execute(query, params + [limit, offset])
+            result = await db.execute(query, [*params, limit, offset])
             rows = await result.fetchall()
 
             return [tuple(row) for row in rows], total_count
