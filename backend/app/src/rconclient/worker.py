@@ -96,6 +96,17 @@ class RCONWorkerPoolConfig:
             reconnect_pause=self.reconnect_pause,
         )
 
+    @staticmethod
+    def valid_shutdown_phase_timeout(value: int | None) -> bool:
+        """Validate a timeout value.
+
+        :param value: The timeout value to validate
+        :return: True if valid, else False
+        """
+        if value is None:
+            return True
+        return value >= RCONWorkerPoolConfig.DISABLE
+
 
 @dataclass
 class RCONWorkerPoolState:
