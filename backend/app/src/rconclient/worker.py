@@ -37,7 +37,7 @@ from .rcon_exceptions import RCONClientIncorrectPasswordError
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from .types import RCONCommand
+    from .command import RCONCommand
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)

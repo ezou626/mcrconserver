@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from backend.app.src.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
 
-from .types import RCONPacketType
+from .command import RCONPacketType
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)

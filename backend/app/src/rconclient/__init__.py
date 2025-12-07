@@ -1,6 +1,6 @@
 """Provides async RCON execution functionality for backend operations."""
 
-from .types import RCONCommand
+from .command import RCONCommand
 from .worker import RCONWorkerPool, RCONWorkerPoolConfig
 
 __all__ = [
