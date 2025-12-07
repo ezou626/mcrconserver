@@ -40,7 +40,8 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
     if not Path(config.database_path).parent.exists():
         Path(config.database_path).parent.mkdir(parents=True, exist_ok=True)
         LOGGER.info(
-            "Created directory for database at %s", Path(config.database_path).parent
+            "Created directory for database at %s",
+            Path(config.database_path).parent,
         )
 
     if not Path(config.database_path).exists():
