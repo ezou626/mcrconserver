@@ -1,6 +1,4 @@
-"""Data classes used in the RCON client module."""
-
-from __future__ import annotations
+"""Defines users, RCON packet types, and RCON command structures."""
 
 import asyncio
 from asyncio import Future
