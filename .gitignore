@@ -2,3 +2,4 @@ test_server/
 logs/
 pids/
 run.sh
+.vscode/
