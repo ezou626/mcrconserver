@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from .queries import AuthQueries, KeyListOptions
     from .security_manager import SecurityManager
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 
 async def _list_api_keys(
@@ -46,6 +46,7 @@ async def _list_api_keys(
 
     api_keys, total_count = await auth_queries.list_api_keys(options)
 
+    LOGGER.debug("Listed %d API keys", len(api_keys))
     return [
         APIKeyInfo(api_key=key, username=username, created_at=created_at)
         for key, username, created_at in api_keys
@@ -61,22 +62,31 @@ async def _revoke_api_key(
     api_user = await auth_queries.get_user_by_api_key(api_key)
 
     if not api_user:
+        LOGGER.debug("API key not found: %s", api_key)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="API key not found",
         )
 
     if not user.role.has_higher_permission(api_user.role):
+        LOGGER.debug(
+            "User %s attempted to revoke API key of user %s",
+            user.username,
+            api_user.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot revoke this API key",
         )
 
     if not await auth_queries.revoke_api_key(api_key):
+        LOGGER.debug("Failed to revoke API key: %s", api_key)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Failed to delete this API key",
         )
+
+    LOGGER.debug("Revoked API key: %s", api_key)
     return "API key revoked successfully"
 
 
@@ -94,10 +104,12 @@ def configure_key_router(
     ) -> str:
         api_key = await auth_queries.generate_api_key(user)
         if not api_key:
+            LOGGER.debug("Failed to create API key for user: %s", user.username)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create API key",
             )
+        LOGGER.debug("Created API key for user: %s", user.username)
         return api_key
 
     @router.get("/api-keys")
