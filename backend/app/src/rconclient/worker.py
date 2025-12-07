@@ -122,7 +122,7 @@ class RCONWorkerPoolState:
 def _fail_remaining_commands(queue: asyncio.Queue[RCONCommand]) -> None:
     """Fail all remaining commands in the queue with a shutdown error.
 
-    :param asyncio.Queue[RCONCommand] queue: The queue to drain of commands
+    :param queue: The queue to drain of commands
     """
     while True:
         try:
