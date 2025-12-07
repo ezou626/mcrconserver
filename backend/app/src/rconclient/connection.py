@@ -201,7 +201,6 @@ class SocketClient:
         and collecting all packets until the "Unknown request c8" response.
 
         :param command: The RCON command to send
-        :type command: str
         :return: The response from the RCON server, or None if auth fails
         :rtype: str | None
 

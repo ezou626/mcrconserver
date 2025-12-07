@@ -263,7 +263,6 @@ class AuthQueries:
         """Generate a secure API key for the given username.
 
         :param user: The User object to generate the API key for
-        :type user: User
         :rtype: str | None
         """
         username = user.username
@@ -287,7 +286,6 @@ class AuthQueries:
         """Revoke the given API key.
 
         :param api_key: The API key to revoke
-        :type api_key: str
         :rtype: int
         """
         async with self.connection as db:

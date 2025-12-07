@@ -98,7 +98,6 @@ class RCONCommand:
             Command IDs must be unique for proper sorting.
 
         :param commands: The list of RCONCommands to sort
-        :type commands: list[RCONCommand]
         :return: The sorted list of RCONCommands or None if a cycle is detected
         :rtype: list[RCONCommand] | None
         :raises ValueError: If a cycle is detected in command dependencies

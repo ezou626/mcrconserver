@@ -65,7 +65,6 @@ class SecurityManager:
         """Prompt the user to create the owner account if it does not exist in CLI.
 
         :param password_config: Password validation configuration to use
-        :type password_config: PasswordConfig | None
         :return: A tuple of (username, password) if the account was created,
         None otherwise
         :rtype: tuple[str, str] | None
@@ -112,9 +111,7 @@ class SecurityManager:
         """Verify and decode a JWT token, returning the user.
 
         :param token: The JWT token string to verify
-        :type token: str
         :param jwt_config: JWT configuration to use
-        :type jwt_config: JWTConfig | None
         :return: The User object if the token is valid, None otherwise
         :rtype: User | None
         """
