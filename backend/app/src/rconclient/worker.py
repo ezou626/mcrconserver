@@ -10,14 +10,6 @@ Job failures or incompletes are the responsibility of the user to evaluate.
 We want shutdown to be graceful and controlled, but also happen within
 timing requirements (when the rest of the app exits, for example).
 
-**Shutdown Phases:**
-
-1. **Queue Lock**: Disallow new additions to the queue (always happens)
-2. **Grace Period**: Process remaining items in the queue with timeout
-3. **Queue Clear**: Fail remaining items in the queue with timeout
-4. **Worker Shutdown**: Shut down the queue and await workers
-5. **Force Cancel**: Cancel workers if they don't shut down gracefully
-
 **Example Usage:**
 
 .. code-block:: python
