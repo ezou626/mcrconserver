@@ -80,7 +80,7 @@ async def _revoke_api_key(
     return "API key revoked successfully"
 
 
-def configure_auth_router(
+def configure_key_router(
     router: APIRouter,
     auth_queries: AuthQueries,
     security_manager: SecurityManager,
