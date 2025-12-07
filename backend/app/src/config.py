@@ -4,12 +4,11 @@ This module provides utilities for loading and validating configuration
 from environment variables.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 from dataclasses import dataclass, field
 
+from app.src.auth import SecurityManager
 from app.src.rconclient import RCONWorkerPoolConfig
 
 LOGGER = logging.getLogger(__name__)
@@ -53,6 +52,10 @@ class AppConfig:
     DEFAULT_DATABASE_PATH: str = "database.db"
     DEFAULT_WORKER_COUNT: int = 3
     DEFAULT_RECONNECT_PAUSE: int = 5
+    DEFAULT_API_KEY_LENGTH: int = 32
+    MINIMUM_JWT_SECRET_KEY_LENGTH: int = 32
+    DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    MINIMUM_PASSPHRASE_LENGTH: int = 20
 
     # Database configuration
     db_path: str = field(
@@ -81,6 +84,36 @@ class AppConfig:
         default_factory=lambda: AppConfig._getenv_int_required("RECONNECT_PAUSE", 5),
     )
 
+    # Security configuration
+    secret_key: str = field(
+        default_factory=lambda: os.getenv("SECRET_KEY", ""),
+    )
+
+    algorithm: str = field(
+        default_factory=lambda: os.getenv("ALGORITHM", "HS512"),
+    )
+
+    access_token_expire_minutes: int = field(
+        default_factory=lambda: AppConfig._getenv_int_required(
+            "ACCESS_TOKEN_EXPIRE_MINUTES",
+            AppConfig.DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES,
+        ),
+    )
+
+    passphrase_min_length: int = field(
+        default_factory=lambda: AppConfig._getenv_int_required(
+            "PASSPHRASE_MIN_LENGTH",
+            AppConfig.MINIMUM_PASSPHRASE_LENGTH,
+        ),
+    )
+
+    api_key_length: int = field(
+        default_factory=lambda: AppConfig._getenv_int_required(
+            "API_KEY_LENGTH",
+            AppConfig.DEFAULT_API_KEY_LENGTH,
+        ),
+    )
+
     # Shutdown configuration
     shutdown_grace_period: int | None = field(
         default_factory=lambda: AppConfig._getenv_int(
@@ -101,6 +134,17 @@ class AppConfig:
         ),
     )
 
+    def __post_init__(self) -> None:
+        """Post-initialization validation."""
+        if self.worker_count <= 0:
+            msg = "WORKER_COUNT must be a positive integer"
+            raise ValueError(msg)
+        if len(self.secret_key) < self.MINIMUM_JWT_SECRET_KEY_LENGTH:
+            LOGGER.warning(
+                "SECRET_KEY is not set or too short, generating a random key",
+            )
+            self.secret_key = os.urandom(self.MINIMUM_JWT_SECRET_KEY_LENGTH).hex()
+
     @property
     def worker_config(self) -> RCONWorkerPoolConfig:
         """Create a RCONWorkerPoolConfig instance from this configuration.
@@ -117,6 +161,21 @@ class AppConfig:
             grace_period=self.shutdown_grace_period,
             queue_clear_period=self.shutdown_queue_clear_period,
             await_shutdown_period=self.shutdown_await_period,
+        )
+
+    @property
+    def security_manager(self) -> SecurityManager:
+        """Create a SecurityManager instance from this configuration.
+
+        :return: Configured SecurityManager instance
+        :rtype: SecurityManager
+        """
+        return SecurityManager(
+            secret_key=self.secret_key,
+            algorithm=self.algorithm,
+            expire_minutes=self.access_token_expire_minutes,
+            passphrase_min_length=self.passphrase_min_length,
+            api_key_length=self.api_key_length,
         )
 
     @staticmethod
