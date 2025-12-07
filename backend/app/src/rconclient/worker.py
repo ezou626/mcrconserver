@@ -72,6 +72,7 @@ class RCONWorkerPoolConfig:
 
     NO_TIMEOUT: ClassVar[None] = None
     DISABLE: ClassVar[int] = 0
+    INFINITE: ClassVar[int] = SocketClientConfig.INFINITE
 
     password: str
     port: int
@@ -82,18 +83,16 @@ class RCONWorkerPoolConfig:
     grace_period: int | None = field(default=DISABLE)
     queue_clear_period: int | None = field(default=NO_TIMEOUT)
     await_shutdown_period: int | None = field(default=NO_TIMEOUT)
+    retry_client_auth_attempts: int = field(default=INFINITE)
 
-    @property
-    def socket_client_config(self) -> SocketClientConfig:
-        """Get a SocketClientConfig based on this worker pool configuration.
-
-        :return: Socket client configuration
-        """
-        return SocketClientConfig(
+    def __post_init__(self) -> None:
+        """Create a SocketClientConfig based on this worker pool configuration."""
+        self.socket_client_config = SocketClientConfig(
             password=self.password,
             port=self.port,
             socket_timeout=self.socket_timeout,
             reconnect_pause=self.reconnect_pause,
+            retry_attempts=self.retry_client_auth_attempts,
         )
 
     @staticmethod
