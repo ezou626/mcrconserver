@@ -1,15 +1,19 @@
 """Tests for user-related functionality."""
 
-import pytest  # noqa: F401
+import pytest
 
 from app.src.common import Role
 
 
-def test_check_permission() -> None:
-    """Test owner permissions."""
-    owner = Role.OWNER
-    admin = Role.ADMIN
-    user = Role.USER
+@pytest.fixture
+def roles() -> tuple[Role, Role, Role]:
+    """Create test roles."""
+    return Role.OWNER, Role.ADMIN, Role.USER
+
+
+def test_check_permission(roles: tuple[Role, Role, Role]) -> None:
+    """Test role permissions."""
+    owner, admin, user = roles
 
     assert owner.check_permission(Role.OWNER)
     assert owner.check_permission(Role.ADMIN)
@@ -24,11 +28,9 @@ def test_check_permission() -> None:
     assert user.check_permission(Role.USER)
 
 
-def test_has_higher_permission() -> None:
+def test_has_higher_permission(roles: tuple[Role, Role, Role]) -> None:
     """Test role hierarchy comparisons."""
-    owner = Role.OWNER
-    admin = Role.ADMIN
-    user = Role.USER
+    owner, admin, user = roles
 
     assert owner.has_higher_permission(admin)
     assert owner.has_higher_permission(user)
