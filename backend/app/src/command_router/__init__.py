@@ -1,5 +1,6 @@
 """Router for handling RCON command requests."""
 
+import asyncio
 import logging
 from asyncio import get_event_loop
 from typing import TYPE_CHECKING, Annotated
@@ -37,6 +38,35 @@ async def _queue_command(
         ) from e
 
     return rcon_command
+
+
+async def _queue_commands(  # noqa: PLR0913
+    commands: list[str],
+    command_ids: list[int],
+    dependencies: list[tuple[int, int]],
+    user: User,
+    pool: RCONWorkerPool,
+    *,
+    require_result: bool = True,
+) -> list[RCONCommand]:
+    """Queue multiple RCON commands and optionally wait for their results."""
+    rcon_commands = RCONCommand.create_job(
+        commands,
+        command_ids,
+        dependencies,
+        user,
+        require_results=require_result,
+    )
+
+    try:
+        await pool.queue_job(rcon_commands)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Error queuing commands: worker shutting down",
+        ) from e
+
+    return rcon_commands
 
 
 async def _await_command_result(
@@ -92,6 +122,31 @@ def configure_command_router(
 
         return await _await_command_result(rcon_command)
 
+    @router.post("/session/commands/batch")
+    async def batch_commands(
+        commands: list[str],
+        command_ids: list[int],
+        dependencies: list[tuple[int, int]],
+        user: Annotated[User, Depends(validate.role(Role.ADMIN))],
+        *,
+        require_result: bool = True,
+    ) -> list[str]:
+        rcon_commands = await _queue_commands(
+            commands,
+            command_ids,
+            dependencies,
+            user,
+            pool,
+            require_result=require_result,
+        )
+
+        if not require_result:
+            return ["Command queued successfully" for _ in rcon_commands]
+
+        return await asyncio.gather(
+            *[_await_command_result(rcon_command) for rcon_command in rcon_commands],
+        )
+
     @router.post("/key/command")
     async def command_with_api_key(
         command: str,
@@ -110,5 +165,30 @@ def configure_command_router(
             return "Command queued successfully"
 
         return await _await_command_result(rcon_command)
+
+    @router.post("/key/commands/batch")
+    async def batch_commands_with_api_key(
+        commands: list[str],
+        command_ids: list[int],
+        dependencies: list[tuple[int, int]],
+        user: Annotated[User, Depends(validate.api_key)],
+        *,
+        require_result: bool = True,
+    ) -> list[str | None]:
+        rcon_commands = await _queue_commands(
+            commands,
+            command_ids,
+            dependencies,
+            user,
+            pool,
+            require_result=require_result,
+        )
+
+        if not require_result:
+            return ["Command queued successfully" for _ in rcon_commands]
+
+        return await asyncio.gather(
+            *[_await_command_result(rcon_command) for rcon_command in rcon_commands],
+        )
 
     return router
