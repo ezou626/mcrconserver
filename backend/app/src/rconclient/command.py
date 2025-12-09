@@ -7,6 +7,8 @@ from enum import IntEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from app.src.common import User
 
 
@@ -91,7 +93,7 @@ class RCONCommand:
         return None
 
     @staticmethod
-    def topological_sort(commands: list[RCONCommand]) -> list[RCONCommand]:
+    def topological_sort(commands: Iterable[RCONCommand]) -> list[RCONCommand]:
         """Sorts commands using topological ordering, with sources first.
 
         .. note::
@@ -134,3 +136,58 @@ class RCONCommand:
                 depth_first_search(command)
 
         return sorted_commands
+
+    @classmethod
+    def create_job(
+        cls,
+        commands: list[str],
+        ids: list[int],
+        dependencies: list[tuple[int, int]],
+        user: User | None,
+        *,
+        require_results: bool = True,
+    ) -> list[RCONCommand]:
+        """Create a job with optional results.
+
+        :param commands: The list of command strings to be sent to the RCON server
+        :param ids: The list of command IDs corresponding to the commands
+        :param dependencies: A list of tuples representing command dependencies
+            (depender_id, dependee_id)
+        :param user: The user who issued the command, if applicable
+        :param require_results: Whether a Future for the result is needed
+
+        :return: The created RCONCommand instances topologically sorted
+
+        :raises ValueError: If a cycle is detected in command
+            dependencies or duplicate IDs exist.
+        """
+        if len(ids) != len(commands):
+            msg = "IDs list must be the same length as commands list"
+            raise ValueError(msg)
+
+        rcon_commands: dict[int, RCONCommand] = {}
+        for command, command_id in zip(commands, ids, strict=True):
+            future = (
+                asyncio.get_event_loop().create_future() if require_results else None
+            )
+            rcon_command = RCONCommand(
+                command=command,
+                user=user,
+                command_id=command_id,
+                result=future,
+            )
+            rcon_commands[command_id] = rcon_command
+
+        # Add dependencies
+        for depender_id, dependee_id in dependencies:
+            depender = rcon_commands.get(depender_id)
+            dependee = rcon_commands.get(dependee_id)
+            if not depender:
+                msg = f"Depender command ID {depender_id} not found"
+                raise ValueError(msg)
+            if not dependee:
+                msg = f"Dependee command ID {dependee_id} not found"
+                raise ValueError(msg)
+            depender.add_dependency(dependee)
+
+        return RCONCommand.topological_sort(rcon_commands.values())
