@@ -1,28 +1,25 @@
-"""
-Unit tests for the RCON client types module.
+"""Unit tests for the RCON client types module.
 
 This module contains comprehensive tests for the :class:`~app.rconclient.types.RCONCommand`
 class, including dependency management, topological sorting, and error handling.
 """
 
-import unittest
 import asyncio
+import unittest
 
-from app.rconclient.types import RCONCommand
-from app.common.user import User, Role
+from app.src.common.user import Role, User
+from app.src.rconclient.command import RCONCommand
 
 
 class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
-    """
-    Test suite for the :class:`app.rconclient.types.RCONCommand` class.
+    """Test suite for the :class:`app.rconclient.types.RCONCommand` class.
 
     :cvar user: Test user fixture with admin role
     :cvar loop: Asyncio event loop for test isolation
     """
 
     def setUp(self):
-        """
-        Set up test fixtures and environment.
+        """Set up test fixtures and environment.
 
         Creates a test user with admin privileges and initializes a new
         asyncio event loop for test isolation.
@@ -33,18 +30,16 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         asyncio.set_event_loop(self.loop)
 
     def tearDown(self):
-        """
-        Clean up test environment.
+        """Clean up test environment.
 
         Properly closes the asyncio event loop to prevent resource leaks.
         """
         self.loop.close()
 
     async def test_rcon_command_creation_with_result(self):
-        """
-        Test RCONCommand creation with result future.
-        """
-        command = RCONCommand.create("list", self.user, require_result=True)
+        """Test RCONCommand creation with result future."""
+        future = asyncio.get_event_loop().create_future()
+        command = RCONCommand(command="list", user=self.user, result=future)
         command.set_command_result("Player count: 5")
 
         self.assertEqual(command.command, "list")
@@ -52,10 +47,9 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await command.get_command_result(), "Player count: 5")
 
     async def test_set_command_error_with_future(self):
-        """
-        Test setting command error when future exists and is awaited.
-        """
-        command = RCONCommand.create("list", self.user, require_result=True)
+        """Test setting command error when future exists and is awaited."""
+        future = asyncio.get_event_loop().create_future()
+        command = RCONCommand(command="list", user=self.user, result=future)
         error = Exception("THIS IS A TEST EXCEPTION")
 
         command.set_command_error(error)
@@ -64,25 +58,32 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
             await command.get_command_result()
 
     async def test_add_dependency(self):
-        """
-        Test adding a dependency to an RCONCommand.
-        """
-        command1 = RCONCommand.create("list", self.user, require_result=True)
-        command2 = RCONCommand.create("say Hello", self.user, require_result=True)
+        """Test adding a dependency to an RCONCommand."""
+        future1 = asyncio.get_event_loop().create_future()
+        command1 = RCONCommand(command="list", user=self.user, result=future1)
+        future2 = asyncio.get_event_loop().create_future()
+        command2 = RCONCommand(command="say Hello", user=self.user, result=future2)
         command2.add_dependency(command1)
 
         self.assertIn(command1, command2.dependencies)
 
     async def test_topological_sort_simple(self):
-        """
-        Verifies that a simple dependency chain
+        """Verifies that a simple dependency chain
         is correctly sorted with dependencies appearing first.
         """
-        command1 = RCONCommand.create(
-            "list", self.user, command_id=1, require_result=True
+        future1 = asyncio.get_event_loop().create_future()
+        command1 = RCONCommand(
+            command="list",
+            user=self.user,
+            command_id=1,
+            result=future1,
         )
-        command2 = RCONCommand.create(
-            "say Hello", self.user, command_id=2, require_result=True
+        future2 = asyncio.get_event_loop().create_future()
+        command2 = RCONCommand(
+            command="say Hello",
+            user=self.user,
+            command_id=2,
+            result=future2,
         )
         command2.add_dependency(command1)
 
@@ -90,15 +91,22 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sorted_commands, [command1, command2])
 
     async def test_topological_sort_cycle(self):
-        """
-        Ensures that circular dependencies are properly detected
+        """Ensures that circular dependencies are properly detected
         and result in a :exc:`ValueError` being raised.
         """
-        command1 = RCONCommand.create(
-            "list", self.user, command_id=1, require_result=True
+        future1 = asyncio.get_event_loop().create_future()
+        command1 = RCONCommand(
+            command="list",
+            user=self.user,
+            command_id=1,
+            result=future1,
         )
-        command2 = RCONCommand.create(
-            "say Hello", self.user, command_id=2, require_result=True
+        future2 = asyncio.get_event_loop().create_future()
+        command2 = RCONCommand(
+            command="say Hello",
+            user=self.user,
+            command_id=2,
+            result=future2,
         )
         command1.add_dependency(command2)
         command2.add_dependency(command1)
@@ -107,30 +115,37 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
             RCONCommand.topological_sort([command1, command2])
 
     async def test_topological_sort_duplicate_ids(self):
-        """
-        Verifies that duplicate command IDs are detected
-        """
-        command1 = RCONCommand.create(
-            "list", self.user, command_id=1, require_result=True
+        """Verifies that duplicate command IDs are detected"""
+        future1 = asyncio.get_event_loop().create_future()
+        command1 = RCONCommand(
+            command="list",
+            user=self.user,
+            command_id=1,
+            result=future1,
         )
-        command2 = RCONCommand.create(
-            "say Hello", self.user, command_id=1, require_result=True
+        future2 = asyncio.get_event_loop().create_future()
+        command2 = RCONCommand(
+            command="say Hello",
+            user=self.user,
+            command_id=1,
+            result=future2,
         )
 
-        sorted_commands = RCONCommand.topological_sort([command1, command2])
-        self.assertIsNone(sorted_commands)
+        with self.assertRaises(ValueError):
+            RCONCommand.topological_sort([command1, command2])
 
     async def test_topological_sort_large_graph(self):
-        """
-        Test topological sorting with a large, complex dependency graph.
-        """
-
+        """Test topological sorting with a large, complex dependency graph."""
         commands: list[RCONCommand] = []
         for i in range(1, 11):
+            future = asyncio.get_event_loop().create_future()
             commands.append(
-                RCONCommand.create(
-                    f"command{i}", self.user, command_id=i, require_result=True
-                )
+                RCONCommand(
+                    command=f"command{i}",
+                    user=self.user,
+                    command_id=i,
+                    result=future,
+                ),
             )
 
         # (dependency, dependent)
@@ -178,16 +193,17 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_topological_sort_complex_cycle_detection(self):
-        """
-        Test cycle detection in a larger graph with multiple potential cycles.
-        """
-
+        """Test cycle detection in a larger graph with multiple potential cycles."""
         commands: list[RCONCommand] = []
         for i in range(1, 11):
+            future = asyncio.get_event_loop().create_future()
             commands.append(
-                RCONCommand.create(
-                    f"command{i}", self.user, command_id=i, require_result=True
-                )
+                RCONCommand(
+                    command=f"command{i}",
+                    user=self.user,
+                    command_id=i,
+                    result=future,
+                ),
             )
 
         dependencies = [
@@ -213,16 +229,17 @@ class TestRCONCommand(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Cycle detected", str(context.exception))
 
     async def test_topological_sort_disconnected_components(self):
-        """
-        Test topological sorting with disconnected components.
-        """
-
+        """Test topological sorting with disconnected components."""
         commands: list[RCONCommand] = []
         for i in range(1, 7):
+            future = asyncio.get_event_loop().create_future()
             commands.append(
-                RCONCommand.create(
-                    f"command{i}", self.user, command_id=i, require_result=True
-                )
+                RCONCommand(
+                    command=f"command{i}",
+                    user=self.user,
+                    command_id=i,
+                    result=future,
+                ),
             )
 
         dependencies = [
