@@ -24,7 +24,7 @@ LOGGER.setLevel(logging.DEBUG)
 
 
 class Validate:
-    """Holds validator dependencies for FastAPI authentication/authorization."""
+    """Holds validation logic for FastAPI authentication/authorization."""
 
     def __init__(
         self,
