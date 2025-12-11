@@ -1,6 +1,7 @@
 """FastAPI application factory for RCON functionality."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -9,14 +10,14 @@ from aiosqlite import connect as aiosqlite_connect
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.src.auth import (
+from app.auth import (
     AuthQueries,
     Validate,
     configure_auth_router,
     configure_key_router,
 )
-from app.src.command_router import configure_command_router
-from app.src.rconclient import RCONWorkerPool
+from app.command_router import configure_command_router
+from app.rconclient import RCONWorkerPool
 
 from .config import load_config_from_env
 
@@ -105,4 +106,14 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
     return app
 
 
-__all__ = ["configure_fastapi_app", "load_config_from_env"]
+def create_app(env_file: str | None = os.environ.get("ENV_FILE", ".env")) -> FastAPI:
+    """Create and configure the FastAPI application.
+
+    The default here is for uvicorn command line usage, in which case the user
+    should set ENV_FILE environment variable if they want a different file.
+
+    :param env_file: Optional path to the environment configuration file
+    :return: Configured FastAPI application
+    """
+    config = load_config_from_env(env_file)
+    return configure_fastapi_app(config)

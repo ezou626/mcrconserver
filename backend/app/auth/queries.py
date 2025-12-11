@@ -14,7 +14,7 @@ from aiosqlite import Connection
 from bcrypt import checkpw, gensalt, hashpw
 from pydantic import BaseModel
 
-from app.src.common import Role, User
+from app.common import Role, User
 
 if TYPE_CHECKING:
     from datetime import datetime

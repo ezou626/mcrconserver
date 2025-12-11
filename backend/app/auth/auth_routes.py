@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, status
 
-from app.src.common import Role, User
+from app.common import Role, User
 
 from .models import LoginResponse, UserResponse
 

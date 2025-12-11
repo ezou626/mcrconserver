@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.src.common import Role, User
-from app.src.rconclient import RCONCommand, RCONWorkerPool
+from app.common import Role, User
+from app.rconclient import RCONCommand, RCONWorkerPool
 
 if TYPE_CHECKING:
-    from app.src.auth import Validate
+    from app.auth import Validate
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
