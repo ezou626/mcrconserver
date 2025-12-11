@@ -17,6 +17,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.10.8",
+    "numpy>=2.3.5",
+    "pandas>=2.3.3",
     "pytest>=9.0.2",
     "sphinx>=9.0.4",
 ]
