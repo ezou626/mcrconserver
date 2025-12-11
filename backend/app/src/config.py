@@ -53,6 +53,7 @@ class AppConfig:
 
     database_path: str
     logging_level: str | None
+    root_path: str
 
     rcon_password: str
     rcon_port: int
@@ -198,6 +199,10 @@ def load_config_from_env(env_file: str | Path | None) -> AppConfig:
             "LOGGING_LEVEL",
             "INFO",
             None,
+        ),
+        root_path=get_env_str(
+            "ROOT_PATH",
+            "",
         ),
         rcon_password=get_env_str("RCON_PASSWORD", None),
         rcon_port=get_env_int(

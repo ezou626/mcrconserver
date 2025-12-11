@@ -83,7 +83,12 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
 
             LOGGER.info("Minecraft RCON Server API is shutting down")
 
-    app = FastAPI(title="Minecraft RCON Server API", version="0.0.1", lifespan=lifespan)
+    app = FastAPI(
+        title="Minecraft RCON Server API",
+        version="0.0.1",
+        lifespan=lifespan,
+        root_path=config.root_path,
+    )
 
     app.add_middleware(
         CORSMiddleware,
