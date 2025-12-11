@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from app.src.common.user import Role, User
-from app.src.rconclient.command import RCONCommand
+from app.common.user import Role, User
+from app.rconclient.command import RCONCommand
 
 if TYPE_CHECKING:
     from collections.abc import Generator

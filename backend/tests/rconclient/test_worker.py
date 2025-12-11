@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.src.common.user import Role, User
-from app.src.rconclient.command import RCONCommand
-from app.src.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
-from app.src.rconclient.worker import (
+from app.common.user import Role, User
+from app.rconclient.command import RCONCommand
+from app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
+from app.rconclient.worker import (
     RCONWorkerPool,
     RCONWorkerPoolConfig,
     RCONWorkerPoolState,

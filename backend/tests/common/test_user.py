@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.src.common import Role
+from app.common import Role
 
 
 @pytest.fixture
