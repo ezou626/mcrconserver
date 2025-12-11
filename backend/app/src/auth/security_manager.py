@@ -60,7 +60,7 @@ class SecurityManager:
 
         return f"Password must be at least {self.passphrase_min_length} characters long"
 
-    def initialize_owner_account(self) -> tuple[str, str] | None:
+    def initialize_owner_account(self) -> tuple[str, str]:
         """Prompt the user to create the owner account if it does not exist in CLI.
 
         :param password_config: Password validation configuration to use

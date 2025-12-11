@@ -144,9 +144,28 @@ class AuthQueries:
             try:
                 await db.execute(AuthQueries.CREATE_USERS_TABLE)
                 await db.execute(AuthQueries.CREATE_API_KEYS_TABLE)
+
+                # setup owner account if no users exist
+                if await self.count_users() != 0:
+                    await db.commit()
+                    return
+
+                username, password = self.security_manager.initialize_owner_account()
+                salt = gensalt()
+                hashed_password = hashpw(password.encode(), salt)
+                await db.execute(
+                    AuthQueries.ADD_USER,
+                    (username, hashed_password, salt, Role.OWNER),
+                )
+                LOGGER.info(
+                    "No users found in database; created default owner account "
+                    "with username '%s'",
+                    username,
+                )
+
                 await db.commit()
             except Exception:
-                await self.connection.rollback()
+                await db.rollback()
                 LOGGER.exception("Error initializing tables")
 
     async def count_users(self) -> int:
@@ -316,6 +335,7 @@ class AuthQueries:
         if options.created_after:
             where.append("created_at > ?")
             params.append(options.created_after.isoformat())
+
         if options.created_before:
             where.append("created_at < ?")
             params.append(options.created_before.isoformat())
@@ -323,19 +343,19 @@ class AuthQueries:
         clause = f" WHERE {' AND '.join(where)}" if where else ""
         return clause, params
 
-    async def _count_api_keys(self, where_clause: str, params: list) -> int:
-        # No SQL injection because user inputs are parameterized
-        query = f"SELECT COUNT(*) FROM api_keys{where_clause}"  # noqa: S608
-        result = await self.connection.execute(query, params)
-        row = await result.fetchone()
-        return row[0] if row else 0
-
     async def _select_api_keys(
         self,
         options: KeyListOptions,
         where_clause: str,
-        params: list,
+        params: list[str],
     ) -> list[tuple[str, str, str]]:
+        """Select API keys based on the given options.
+
+        :param options: Sanitized options for selection query
+        :param where_clause: Sanitized WHERE clause for filtering
+        :param params: Parameters for the WHERE clause
+        :return: A list of tuples of (api_key, username, created_at)
+        """
         offset = (options.page - 1) * options.limit
 
         order_clause = " "
@@ -364,16 +384,13 @@ class AuthQueries:
         :return: Tuple of (list of (key, username, created_at), total count)
         """
         where_clause, params = self._build_filters(options)
-        total = await self._count_api_keys(where_clause, params)
-        if total == 0:
-            return [], 0
         rows = await self._select_api_keys(
             options,
             where_clause,
             params,
         )
 
-        return rows, total
+        return rows, len(rows)
 
     async def get_user_by_api_key(self, api_key: str) -> User | None:
         """Get user by API key.
