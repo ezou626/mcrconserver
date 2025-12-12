@@ -12,12 +12,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.auth import (
     AuthQueries,
+    SecurityManager,
     Validate,
     configure_auth_router,
     configure_key_router,
 )
 from backend.app.command_router import configure_command_router
 from backend.app.rconclient import RCONWorkerPool
+from backend.app.rconclient.worker import RCONWorkerPoolConfig
 from backend.config import load_config_from_env
 
 if TYPE_CHECKING:
@@ -35,8 +37,17 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
     :param config: Application configuration
     :return: Configured FastAPI application
     """
-    worker_pool = RCONWorkerPool(config.worker_config)
+    worker_config = RCONWorkerPoolConfig(
+        password=config.rcon_password,
+        port=config.rcon_port,
+        socket_timeout=config.rcon_socket_timeout,
+        worker_count=config.worker_count,
+        reconnect_pause=config.reconnect_pause,
+        grace_period=config.shutdown_grace_period,
+        await_shutdown_period=config.shutdown_await_period,
+    )
 
+    worker_pool = RCONWorkerPool(worker_config)
     if not Path(config.database_path).parent.exists():
         Path(config.database_path).parent.mkdir(parents=True, exist_ok=True)
         LOGGER.info(
@@ -59,7 +70,15 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
             aiosqlite_connect(config.database_path) as db_connection,
             worker_pool as pool,
         ):
-            auth_queries = AuthQueries(db_connection, config.security_manager)
+            security_manager = SecurityManager(
+                secret_key=config.secret_key,
+                algorithm=config.algorithm,
+                expire_minutes=config.access_token_expire_minutes,
+                passphrase_min_length=config.passphrase_min_length,
+                api_key_length=config.api_key_length,
+            )
+
+            auth_queries = AuthQueries(db_connection, security_manager)
 
             validate = Validate(auth_queries)
 

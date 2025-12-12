@@ -13,8 +13,7 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 from jwt.algorithms import get_default_algorithms
 
-from backend.app.auth import SecurityManager
-from backend.app.rconclient import RCONWorkerPoolConfig
+from backend.benchmarks import BenchmarkConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,24 +77,15 @@ class AppConfig:
     shutdown_grace_period: int | None
     shutdown_await_period: int | None
 
+    minecraft_server_path: str
+
     def __post_init__(self) -> None:
         """Initialize derived configuration attributes."""
-        self.worker_config = RCONWorkerPoolConfig(
-            password=self.rcon_password,
-            port=self.rcon_port,
-            socket_timeout=self.rcon_socket_timeout,
-            worker_count=self.worker_count,
-            reconnect_pause=self.reconnect_pause,
-            grace_period=self.shutdown_grace_period,
-            await_shutdown_period=self.shutdown_await_period,
-        )
-
-        self.security_manager = SecurityManager(
-            secret_key=self.secret_key,
-            algorithm=self.algorithm,
-            expire_minutes=self.access_token_expire_minutes,
-            passphrase_min_length=self.passphrase_min_length,
-            api_key_length=self.api_key_length,
+        self.benchmark_config = BenchmarkConfig(
+            minecraft_server_jar_path=self.minecraft_server_path,
+            rcon_port=self.rcon_port,
+            rcon_password=self.rcon_password,
+            results_directory="./",
         )
 
 
@@ -270,12 +260,13 @@ def load_config_from_env(env_file: str | Path | None) -> AppConfig:
         ),
         shutdown_grace_period=get_env_optional_int(
             "SHUTDOWN_GRACE_PERIOD",
-            RCONWorkerPoolConfig.DISABLE,
-            lambda period: RCONWorkerPoolConfig.valid_shutdown_phase_timeout(period),
+            -1,
+            lambda period: period >= -1,
         ),
         shutdown_await_period=get_env_optional_int(
             "SHUTDOWN_AWAIT_PERIOD",
-            RCONWorkerPoolConfig.NO_TIMEOUT,
-            lambda period: RCONWorkerPoolConfig.valid_shutdown_phase_timeout(period),
+            -1,
+            lambda period: period >= -1,
         ),
+        minecraft_server_path=get_env_str("MINECRAFT_SERVER_PATH", ""),
     )
