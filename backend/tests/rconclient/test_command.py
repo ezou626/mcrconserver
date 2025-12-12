@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from backend.app.common.user import Role, User
-from backend.app.rconclient.command import RCONCommand
+from backend.app.rconclient.command import RCONCommand, RCONCommandSpecification
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -68,113 +68,104 @@ async def test_add_dependency(test_user: User) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_job_from_specification_simple(test_user: User) -> None:
+    """Test creating job with simple dependencies."""
+    specs = [
+        RCONCommandSpecification(id=1, cmd="setup"),
+        RCONCommandSpecification(id=2, cmd="action", dependencies=[1]),
+    ]
+
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    by_id = {c.command_id: c for c in commands}
+
+    assert len(commands) == 2  # noqa: PLR2004
+    assert len(by_id[2].dependencies) == 1
+    assert by_id[2].dependencies[0].command_id == 1
+    assert by_id[1].command == "setup"
+    assert by_id[2].command == "action"
+
+
+@pytest.mark.asyncio
+async def test_create_job_from_specification_complex(test_user: User) -> None:
+    """Test create_job_from_specification with more complex dependencies."""
+    specs = [
+        RCONCommandSpecification(id=1, cmd="setup"),
+        RCONCommandSpecification(id=2, cmd="action1", dependencies=[1]),
+        RCONCommandSpecification(id=3, cmd="action2", dependencies=[1]),
+        RCONCommandSpecification(id=4, cmd="cleanup", dependencies=[2, 3]),
+    ]
+
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    by_id = {c.command_id: c for c in commands}
+
+    # Check all edges exist
+    assert len(by_id[2].dependencies) == 1
+    assert by_id[2].dependencies[0].command_id == 1
+    assert len(by_id[3].dependencies) == 1
+    assert by_id[3].dependencies[0].command_id == 1
+    assert len(by_id[4].dependencies) == 2  # noqa: PLR2004
+    assert {d.command_id for d in by_id[4].dependencies} == {2, 3}
+
+
+@pytest.mark.asyncio
 async def test_topological_sort_simple(test_user: User) -> None:
     """Verify a simple dependency chain."""
-    future1 = asyncio.get_event_loop().create_future()
-    command1 = RCONCommand(
-        command="list",
-        user=test_user,
-        command_id=1,
-        result=future1,
-    )
-    future2 = asyncio.get_event_loop().create_future()
-    command2 = RCONCommand(
-        command="say Hello",
-        user=test_user,
-        command_id=2,
-        result=future2,
-    )
-    command2.add_dependency(command1)
+    specs = [
+        RCONCommandSpecification(id=1, cmd="list"),
+        RCONCommandSpecification(id=2, cmd="say Hello", dependencies=[1]),
+    ]
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
 
-    sorted_commands = RCONCommand.topological_sort([command2, command1])
-    assert sorted_commands == [command1, command2]
+    sorted_commands = RCONCommand.topological_sort(commands)
+    assert [c.command_id for c in sorted_commands] == [1, 2]
 
 
 @pytest.mark.asyncio
 async def test_topological_sort_cycle(test_user: User) -> None:
     """Ensures that circular dependencies are properly detected."""
-    future1 = asyncio.get_event_loop().create_future()
-    command1 = RCONCommand(
-        command="list",
-        user=test_user,
-        command_id=1,
-        result=future1,
-    )
-    future2 = asyncio.get_event_loop().create_future()
-    command2 = RCONCommand(
-        command="say Hello",
-        user=test_user,
-        command_id=2,
-        result=future2,
-    )
-    command1.add_dependency(command2)
-    command2.add_dependency(command1)
+    specs = [
+        RCONCommandSpecification(id=1, cmd="list", dependencies=[2]),
+        RCONCommandSpecification(id=2, cmd="say Hello", dependencies=[1]),
+    ]
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
 
     with pytest.raises(ValueError, match="Cycle detected"):
-        RCONCommand.topological_sort([command1, command2])
+        RCONCommand.topological_sort(commands)
 
 
 @pytest.mark.asyncio
 async def test_topological_sort_duplicate_ids(test_user: User) -> None:
     """Verifies that duplicate command IDs are detected."""
-    future1 = asyncio.get_event_loop().create_future()
-    command1 = RCONCommand(
-        command="list",
-        user=test_user,
-        command_id=1,
-        result=future1,
-    )
-    future2 = asyncio.get_event_loop().create_future()
-    command2 = RCONCommand(
-        command="say Hello",
-        user=test_user,
-        command_id=1,
-        result=future2,
-    )
+    specs = [
+        RCONCommandSpecification(id=1, cmd="list", dependencies=[]),
+        RCONCommandSpecification(id=1, cmd="say Hello", dependencies=[]),
+    ]
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
 
     with pytest.raises(ValueError, match="Duplicate"):
-        RCONCommand.topological_sort([command1, command2])
+        RCONCommand.topological_sort(commands)
 
 
 @pytest.mark.asyncio
 async def test_topological_sort_large_graph(test_user: User) -> None:
     """Test topological sorting with a large, complex dependency graph."""
-    commands: list[RCONCommand] = []
-    for i in range(1, 11):
-        future = asyncio.get_event_loop().create_future()
-        commands.append(
-            RCONCommand(
-                command=f"command{i}",
-                user=test_user,
-                command_id=i,
-                result=future,
-            ),
-        )
-
-    # dependency, dependent
-    dependencies = [
-        (1, 3),
-        (1, 4),
-        (2, 4),
-        (2, 5),
-        (3, 6),
-        (3, 7),
-        (4, 7),
-        (4, 8),
-        (5, 8),
-        (6, 9),
-        (7, 9),
-        (7, 10),
-        (8, 10),
+    specs = [
+        RCONCommandSpecification(id=1, cmd="command1"),
+        RCONCommandSpecification(id=2, cmd="command2"),
+        RCONCommandSpecification(id=3, cmd="command3", dependencies=[1]),
+        RCONCommandSpecification(id=4, cmd="command4", dependencies=[1, 2]),
+        RCONCommandSpecification(id=5, cmd="command5", dependencies=[2]),
+        RCONCommandSpecification(id=6, cmd="command6", dependencies=[3]),
+        RCONCommandSpecification(id=7, cmd="command7", dependencies=[3, 4]),
+        RCONCommandSpecification(id=8, cmd="command8", dependencies=[4, 5]),
+        RCONCommandSpecification(id=9, cmd="command9", dependencies=[6, 7]),
+        RCONCommandSpecification(id=10, cmd="command10", dependencies=[7, 8]),
     ]
 
-    for dep_id, cmd_id in dependencies:
-        commands[cmd_id - 1].add_dependency(commands[dep_id - 1])
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    sorted_commands = RCONCommand.topological_sort(commands)
 
-    command_list = list(commands)
-    sorted_commands = RCONCommand.topological_sort(command_list)
-
-    assert len(sorted_commands) == len(commands)
+    assert len(sorted_commands) == len(specs)
 
     position = {cmd.command_id: i for i, cmd in enumerate(sorted_commands)}
 
@@ -184,43 +175,17 @@ async def test_topological_sort_large_graph(test_user: User) -> None:
                 f"Dependency {dependency.command_id} comes before {cmd.command_id}"
             )
 
-    for dep_id, cmd_id in dependencies:
-        assert position[dep_id] < position[cmd_id], (
-            f"Command {dep_id} comes before command {cmd_id}"
-        )
-
 
 @pytest.mark.asyncio
 async def test_topological_sort_complex_cycle_detection(test_user: User) -> None:
     """Test cycle detection in a larger graph with multiple potential cycles."""
-    commands: list[RCONCommand] = []
-    for i in range(1, 11):
-        future = asyncio.get_event_loop().create_future()
-        commands.append(
-            RCONCommand(
-                command=f"command{i}",
-                user=test_user,
-                command_id=i,
-                result=future,
-            ),
-        )
-
-    dependencies = [
-        (1, 2),
-        (2, 3),
-        (3, 1),
-        (4, 5),
-        (5, 6),
-        (6, 4),
-        (2, 4),
-        (7, 8),
-        (3, 7),
-        (5, 9),
-        (9, 10),
+    specs = [
+        RCONCommandSpecification(id=1, cmd="command1", dependencies=[3]),
+        RCONCommandSpecification(id=2, cmd="command2", dependencies=[1]),
+        RCONCommandSpecification(id=3, cmd="command3", dependencies=[2]),
     ]
 
-    for dep_id, cmd_id in dependencies:
-        commands[cmd_id - 1].add_dependency(commands[dep_id - 1])
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
 
     with pytest.raises(ValueError, match="Cycle detected") as exc_info:
         RCONCommand.topological_sort(commands)
@@ -231,34 +196,23 @@ async def test_topological_sort_complex_cycle_detection(test_user: User) -> None
 @pytest.mark.asyncio
 async def test_topological_sort_disconnected_components(test_user: User) -> None:
     """Test topological sorting with disconnected components."""
-    commands: list[RCONCommand] = []
-    for i in range(1, 7):
-        future = asyncio.get_event_loop().create_future()
-        commands.append(
-            RCONCommand(
-                command=f"command{i}",
-                user=test_user,
-                command_id=i,
-                result=future,
-            ),
-        )
-
-    dependencies = [
-        (1, 2),
-        (2, 3),
-        (4, 5),
+    specs = [
+        RCONCommandSpecification(id=1, cmd="command1"),
+        RCONCommandSpecification(id=2, cmd="command2", dependencies=[1]),
+        RCONCommandSpecification(id=3, cmd="command3", dependencies=[2]),
+        RCONCommandSpecification(id=4, cmd="command4"),
+        RCONCommandSpecification(id=5, cmd="command5", dependencies=[4]),
+        RCONCommandSpecification(id=6, cmd="command6"),
     ]
 
-    for dep_id, cmd_id in dependencies:
-        commands[cmd_id - 1].add_dependency(commands[dep_id - 1])
-
+    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
     sorted_commands = RCONCommand.topological_sort(commands)
 
-    assert len(sorted_commands) == len(commands)
+    assert len(sorted_commands) == len(specs)
 
     position = {cmd.command_id: i for i, cmd in enumerate(sorted_commands)}
 
-    for dep_id, cmd_id in dependencies:
-        assert position[dep_id] < position[cmd_id], (
-            f"Command {dep_id} should come before command {cmd_id}"
-        )
+    # Check the dependencies that exist
+    assert position[1] < position[2], "Command 1 should come before command 2"
+    assert position[2] < position[3], "Command 2 should come before command 3"
+    assert position[4] < position[5], "Command 4 should come before command 5"
