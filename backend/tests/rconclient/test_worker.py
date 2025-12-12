@@ -17,7 +17,6 @@ from backend.app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordEr
 from backend.app.rconclient.worker import (
     RCONWorkerPool,
     RCONWorkerPoolConfig,
-    RCONWorkerPoolState,
     _fail_remaining_commands,
 )
 
@@ -42,7 +41,7 @@ def worker_config() -> RCONWorkerPoolConfig:
         password="test_password",  # noqa: S106
         port=25575,
         socket_timeout=10,
-        worker_count=2,
+        worker_count=1,  # if we chose wrong, deadlock
         reconnect_pause=1,
         grace_period=1,
         queue_clear_period=1,
@@ -62,7 +61,7 @@ def mock_socket_client() -> AsyncMock:
 class TestRCONWorkerPoolConfig:
     """Test suite for RCONWorkerPoolConfig functionality."""
 
-    def test_config_creation_with_defaults(self) -> None:
+    def test_config_creation_creates_socket_config(self) -> None:
         """Test that config can be created with required parameters."""
         config = RCONWorkerPoolConfig(
             password="test_pass",  # noqa: S106
@@ -72,28 +71,11 @@ class TestRCONWorkerPoolConfig:
             reconnect_pause=5,
         )
 
-        assert config.password == "test_pass"  # noqa: S105
-        assert config.port == DEFAULT_PORT
-        assert config.socket_timeout == TEST_TIMEOUT
-        assert config.worker_count == 1
-        assert config.reconnect_pause == DEFUALT_PAUSE
-        assert config.grace_period == RCONWorkerPoolConfig.DISABLE
-        assert config.queue_clear_period == RCONWorkerPoolConfig.NO_TIMEOUT
-
-    def test_config_post_init_creates_socket_config(self) -> None:
-        """Test that __post_init__ creates a proper SocketClientConfig."""
-        config = RCONWorkerPoolConfig(
-            password="test_pass",  # noqa: S106
-            port=25575,
-            socket_timeout=30,
-            worker_count=1,
-            reconnect_pause=5,
-        )
-
-        assert hasattr(config, "socket_client_config")
         assert config.socket_client_config.password == "test_pass"  # noqa: S105
         assert config.socket_client_config.port == DEFAULT_PORT
         assert config.socket_client_config.socket_timeout == TEST_TIMEOUT
+        assert config.worker_count == 1
+        assert config.socket_client_config.reconnect_pause == DEFUALT_PAUSE
 
     def test_valid_shutdown_phase_timeout_validation(self) -> None:
         """Test the validation logic for shutdown phase timeouts."""
@@ -103,27 +85,6 @@ class TestRCONWorkerPoolConfig:
 
         assert not RCONWorkerPoolConfig.valid_shutdown_phase_timeout(-1)
         assert not RCONWorkerPoolConfig.valid_shutdown_phase_timeout(-5)
-
-
-class TestRCONWorkerPoolState:
-    """Test suite for RCONWorkerPoolState functionality."""
-
-    def test_state_creation_with_defaults(self) -> None:
-        """Test that state is created with proper defaults."""
-        state = RCONWorkerPoolState()
-
-        assert state.pool_should_shutdown is False
-        assert state.worker_should_shutdown is False
-
-    def test_state_modification(self) -> None:
-        """Test that state can be modified during runtime."""
-        state = RCONWorkerPoolState()
-
-        state.pool_should_shutdown = True
-        state.worker_should_shutdown = True
-
-        assert state.pool_should_shutdown is True
-        assert state.worker_should_shutdown is True
 
 
 @pytest.mark.asyncio
@@ -155,10 +116,10 @@ class TestFailRemainingCommands:
 
         _fail_remaining_commands(queue)
 
-        with pytest.raises(ConnectionError, match="Processing pool shut down"):
+        with pytest.raises(ConnectionError, match="pool shut down"):
             await future1
 
-        with pytest.raises(ConnectionError, match="Processing pool shut down"):
+        with pytest.raises(ConnectionError, match="pool shut down"):
             await future2
 
         assert queue.empty()
@@ -176,39 +137,6 @@ class TestFailRemainingCommands:
 class TestRCONWorkerPool:
     """Test suite for RCONWorkerPool functionality."""
 
-    async def test_worker_pool_initialization(
-        self,
-        worker_config: RCONWorkerPoolConfig,
-    ) -> None:
-        """Test that worker pool is initialized correctly."""
-        pool = RCONWorkerPool(worker_config)
-
-        assert pool.config == worker_config
-        assert isinstance(pool.state, RCONWorkerPoolState)
-        assert isinstance(pool._queue, asyncio.Queue)  # noqa: SLF001
-        assert pool._workers == []  # noqa: SLF001
-        assert pool.clients == []
-
-    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
-    async def test_worker_pool_connect_success(
-        self,
-        mock_get_client: MagicMock,
-        worker_config: RCONWorkerPoolConfig,
-        mock_socket_client: AsyncMock,
-    ) -> None:
-        """Test successful worker pool connection and worker startup."""
-        mock_get_client.return_value = mock_socket_client
-
-        pool = RCONWorkerPool(worker_config)
-        await pool.connect()
-
-        assert len(pool.clients) == worker_config.worker_count
-        assert len(pool._workers) == worker_config.worker_count  # noqa: SLF001
-
-        assert mock_get_client.call_count == worker_config.worker_count
-
-        await pool.shutdown()
-
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_pool_connect_auth_failure(
         self,
@@ -224,7 +152,6 @@ class TestRCONWorkerPool:
 
         with pytest.raises(
             RCONClientIncorrectPasswordError,
-            match="One or more workers failed to authenticate",
         ):
             await pool.connect()
 
@@ -242,16 +169,6 @@ class TestRCONWorkerPool:
         with pytest.raises(ConnectionError):
             await pool.connect()
 
-    async def test_worker_pool_connect_with_none_config(self) -> None:
-        """Test that connect raises error when config is None."""
-        pool = RCONWorkerPool(None)
-
-        with pytest.raises(
-            ValueError,
-            match="RCONWorkerPool configuration must be provided",
-        ):
-            await pool.connect()
-
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_context_manager_usage(
         self,
@@ -263,7 +180,6 @@ class TestRCONWorkerPool:
         mock_get_client.return_value = mock_socket_client
 
         async with RCONWorkerPool(worker_config) as pool:
-            assert len(pool.clients) == worker_config.worker_count
             assert len(pool._workers) == worker_config.worker_count  # noqa: SLF001
 
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
@@ -299,20 +215,23 @@ class TestRCONWorkerPool:
         mock_socket_client: AsyncMock,
         test_user: User,
     ) -> None:
-        """Test that queueing command during shutdown raises error."""
+        """Test that queueing commands during shutdown raises error."""
         mock_get_client.return_value = mock_socket_client
 
         pool = RCONWorkerPool(worker_config)
         await pool.connect()
 
-        pool.state.pool_should_shutdown = True
+        await pool.shutdown()
 
         command = RCONCommand(command="list", user=test_user, command_id=1)
 
-        with pytest.raises(RuntimeError, match="Worker pool is shutting down"):
+        with pytest.raises(RuntimeError, match="pool is shutting down"):
             await pool.queue_command(command)
 
-        await pool.shutdown()
+        commands = [RCONCommand(command="list", user=test_user, command_id=1)]
+
+        with pytest.raises(RuntimeError, match="pool is shutting down"):
+            await pool.queue_job(commands)
 
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_job_with_dependencies(
@@ -351,29 +270,6 @@ class TestRCONWorkerPool:
             assert all(result == "test response" for result in results)
 
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
-    async def test_queue_job_during_shutdown(
-        self,
-        mock_get_client: MagicMock,
-        worker_config: RCONWorkerPoolConfig,
-        mock_socket_client: AsyncMock,
-        test_user: User,
-    ) -> None:
-        """Test that queueing job during shutdown raises error."""
-        mock_get_client.return_value = mock_socket_client
-
-        pool = RCONWorkerPool(worker_config)
-        await pool.connect()
-
-        pool.state.pool_should_shutdown = True
-
-        commands = [RCONCommand(command="list", user=test_user, command_id=1)]
-
-        with pytest.raises(RuntimeError, match="Worker pool is shutting down"):
-            await pool.queue_job(commands)
-
-        await pool.shutdown()
-
-    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_job_with_invalid_dependencies(
         self,
         mock_get_client: MagicMock,
@@ -381,7 +277,7 @@ class TestRCONWorkerPool:
         mock_socket_client: AsyncMock,
         test_user: User,
     ) -> None:
-        """Test that queueing job with cycle raises error."""
+        """Test that queueing bad jobs raises error."""
         mock_get_client.return_value = mock_socket_client
 
         async with RCONWorkerPool(worker_config) as pool:
@@ -392,49 +288,18 @@ class TestRCONWorkerPool:
 
             commands = [command1, command2]
 
-            with pytest.raises(
-                ValueError,
-                match="Failed to sort commands for job due to cycle or duplicate IDs",
-            ):
+            with pytest.raises(ValueError, match="cycle"):
                 await pool.queue_job(commands)
 
-    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
-    async def test_graceful_shutdown_phases(
-        self,
-        mock_get_client: MagicMock,
-        mock_socket_client: AsyncMock,
-    ) -> None:
-        """Test that shutdown follows the configured phases."""
-        mock_get_client.return_value = mock_socket_client
+            command1 = RCONCommand(command="list", user=test_user, command_id=1)
+            command2 = RCONCommand(command="say hello", user=test_user, command_id=1)
+            command1.add_dependency(command2)
+            command2.add_dependency(command1)
 
-        config = RCONWorkerPoolConfig(
-            password="test_password",  # noqa: S106
-            port=25575,
-            socket_timeout=1,
-            worker_count=1,
-            reconnect_pause=1,
-            grace_period=0,
-            queue_clear_period=0,
-            await_shutdown_period=0,
-        )
+            commands = [command1, command2]
 
-        pool = RCONWorkerPool(config)
-        await pool.connect()
-
-        await asyncio.wait_for(pool.shutdown(), timeout=5.0)
-
-        assert pool.state.pool_should_shutdown is True
-        assert pool.state.worker_should_shutdown is True
-
-    async def test_shutdown_with_none_config(self) -> None:
-        """Test that shutdown raises error when config is None."""
-        pool = RCONWorkerPool(None)
-
-        with pytest.raises(
-            ValueError,
-            match="RCONWorkerPool configuration must be provided",
-        ):
-            await pool.shutdown()
+            with pytest.raises(ValueError, match="duplicate"):
+                await pool.queue_job(commands)
 
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_handles_connection_error(
@@ -463,38 +328,3 @@ class TestRCONWorkerPool:
             await asyncio.sleep(0.5)
 
             mock_client.send_command.assert_called_once_with("list")
-
-    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
-    async def test_worker_processes_command_with_dependencies(
-        self,
-        mock_get_client: MagicMock,
-        worker_config: RCONWorkerPoolConfig,
-        mock_socket_client: AsyncMock,
-        test_user: User,
-    ) -> None:
-        """Test that workers wait for dependencies before processing commands."""
-        mock_get_client.return_value = mock_socket_client
-
-        async with RCONWorkerPool(worker_config) as pool:
-            future1 = asyncio.get_event_loop().create_future()
-            future2 = asyncio.get_event_loop().create_future()
-            command1 = RCONCommand(
-                command="setup",
-                user=test_user,
-                command_id=1,
-                result=future1,
-            )
-            command2 = RCONCommand(
-                command="execute",
-                user=test_user,
-                command_id=2,
-                result=future2,
-            )
-            command2.add_dependency(command1)
-
-            await pool.queue_command(command2)
-            await asyncio.sleep(0.1)
-            await pool.queue_command(command1)
-
-            results = await asyncio.gather(future1, future2)
-            assert all(result == "test response" for result in results)

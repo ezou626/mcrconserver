@@ -95,7 +95,7 @@ async def test_create_job_from_specification_complex(test_user: User) -> None:
         RCONCommandSpecification(id=4, cmd="cleanup", dependencies=[2, 3]),
     ]
 
-    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    commands = RCONCommand.create_job_from_specification(specs, test_user)
     by_id = {c.command_id: c for c in commands}
 
     # Check all edges exist
@@ -114,7 +114,7 @@ async def test_topological_sort_simple(test_user: User) -> None:
         RCONCommandSpecification(id=1, cmd="list"),
         RCONCommandSpecification(id=2, cmd="say Hello", dependencies=[1]),
     ]
-    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    commands = RCONCommand.create_job_from_specification(specs, test_user)
 
     sorted_commands = RCONCommand.topological_sort(commands)
     assert [c.command_id for c in sorted_commands] == [1, 2]
@@ -127,9 +127,9 @@ async def test_topological_sort_cycle(test_user: User) -> None:
         RCONCommandSpecification(id=1, cmd="list", dependencies=[2]),
         RCONCommandSpecification(id=2, cmd="say Hello", dependencies=[1]),
     ]
-    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    commands = RCONCommand.create_job_from_specification(specs, test_user)
 
-    with pytest.raises(ValueError, match="Cycle detected"):
+    with pytest.raises(ValueError, match=r"cycle|Cycle"):
         RCONCommand.topological_sort(commands)
 
 
@@ -140,10 +140,9 @@ async def test_topological_sort_duplicate_ids(test_user: User) -> None:
         RCONCommandSpecification(id=1, cmd="list", dependencies=[]),
         RCONCommandSpecification(id=1, cmd="say Hello", dependencies=[]),
     ]
-    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
 
-    with pytest.raises(ValueError, match="Duplicate"):
-        RCONCommand.topological_sort(commands)
+    with pytest.raises(ValueError, match=r"duplicate|Duplicate"):
+        RCONCommand.create_job_from_specification(specs, test_user)
 
 
 @pytest.mark.asyncio
@@ -162,7 +161,7 @@ async def test_topological_sort_large_graph(test_user: User) -> None:
         RCONCommandSpecification(id=10, cmd="command10", dependencies=[7, 8]),
     ]
 
-    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    commands = RCONCommand.create_job_from_specification(specs, test_user)
     sorted_commands = RCONCommand.topological_sort(commands)
 
     assert len(sorted_commands) == len(specs)
@@ -180,12 +179,15 @@ async def test_topological_sort_large_graph(test_user: User) -> None:
 async def test_topological_sort_complex_cycle_detection(test_user: User) -> None:
     """Test cycle detection in a larger graph with multiple potential cycles."""
     specs = [
-        RCONCommandSpecification(id=1, cmd="command1", dependencies=[3]),
-        RCONCommandSpecification(id=2, cmd="command2", dependencies=[1]),
-        RCONCommandSpecification(id=3, cmd="command3", dependencies=[2]),
+        RCONCommandSpecification(id=1, cmd="command1", dependencies=[2]),
+        RCONCommandSpecification(id=2, cmd="command2", dependencies=[3]),
+        RCONCommandSpecification(id=3, cmd="command3", dependencies=[4]),
+        RCONCommandSpecification(id=4, cmd="command3", dependencies=[5, 1]),
+        RCONCommandSpecification(id=5, cmd="command3", dependencies=[1, 3]),
+        RCONCommandSpecification(id=6, cmd="command3", dependencies=[2]),
     ]
 
-    commands = list(RCONCommand.create_job_from_specification(specs, test_user))
+    commands = RCONCommand.create_job_from_specification(specs, test_user)
 
     with pytest.raises(ValueError, match="Cycle detected") as exc_info:
         RCONCommand.topological_sort(commands)
