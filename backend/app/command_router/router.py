@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from asyncio import get_event_loop
+from asyncio import get_running_loop
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,7 +39,7 @@ async def _queue_command(
     require_result: bool = True,
 ) -> RCONCommand:
     """Queue an RCON command and optionally wait for the result."""
-    future = get_event_loop().create_future() if require_result else None
+    future = get_running_loop().create_future() if require_result else None
 
     rcon_command = RCONCommand(command=command, user=user, result=future)
 

@@ -76,7 +76,6 @@ class AppConfig:
     api_key_length: int
 
     shutdown_grace_period: int | None
-    shutdown_queue_clear_period: int | None
     shutdown_await_period: int | None
 
     def __post_init__(self) -> None:
@@ -88,7 +87,6 @@ class AppConfig:
             worker_count=self.worker_count,
             reconnect_pause=self.reconnect_pause,
             grace_period=self.shutdown_grace_period,
-            queue_clear_period=self.shutdown_queue_clear_period,
             await_shutdown_period=self.shutdown_await_period,
         )
 
@@ -273,11 +271,6 @@ def load_config_from_env(env_file: str | Path | None) -> AppConfig:
         shutdown_grace_period=get_env_optional_int(
             "SHUTDOWN_GRACE_PERIOD",
             RCONWorkerPoolConfig.DISABLE,
-            lambda period: RCONWorkerPoolConfig.valid_shutdown_phase_timeout(period),
-        ),
-        shutdown_queue_clear_period=get_env_optional_int(
-            "SHUTDOWN_QUEUE_CLEAR_PERIOD",
-            RCONWorkerPoolConfig.NO_TIMEOUT,
             lambda period: RCONWorkerPoolConfig.valid_shutdown_phase_timeout(period),
         ),
         shutdown_await_period=get_env_optional_int(

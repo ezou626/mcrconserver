@@ -171,7 +171,7 @@ class RCONCommand:
         :return: The created RCONCommand
         """
         result = (
-            asyncio.get_event_loop().create_future()
+            asyncio.get_running_loop().create_future()
             if specification.require_result
             else None
         )
