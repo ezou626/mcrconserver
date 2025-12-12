@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from app.common import User
+    from backend.app.common import User
 
 
 class RCONPacketType(IntEnum):

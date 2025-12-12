@@ -10,14 +10,14 @@ from aiosqlite import connect as aiosqlite_connect
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.auth import (
+from backend.app.auth import (
     AuthQueries,
     Validate,
     configure_auth_router,
     configure_key_router,
 )
-from app.command_router import configure_command_router
-from app.rconclient import RCONWorkerPool
+from backend.app.command_router import configure_command_router
+from backend.app.rconclient import RCONWorkerPool
 
 from .config import load_config_from_env
 

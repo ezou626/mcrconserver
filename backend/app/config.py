@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 from jwt.algorithms import get_default_algorithms
 
-from app.auth import SecurityManager
-from app.rconclient import RCONWorkerPoolConfig
+from backend.app.auth import SecurityManager
+from backend.app.rconclient import RCONWorkerPoolConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
