@@ -174,8 +174,6 @@ async def test_topological_sort_large_graph(test_user: User) -> None:
     command_list = list(commands)
     sorted_commands = RCONCommand.topological_sort(command_list)
 
-    # raw assert for Ruff
-    assert sorted_commands is not None
     assert len(sorted_commands) == len(commands)
 
     position = {cmd.command_id: i for i, cmd in enumerate(sorted_commands)}
@@ -256,8 +254,6 @@ async def test_topological_sort_disconnected_components(test_user: User) -> None
 
     sorted_commands = RCONCommand.topological_sort(commands)
 
-    # raw assert for Ruff
-    assert sorted_commands is not None
     assert len(sorted_commands) == len(commands)
 
     position = {cmd.command_id: i for i, cmd in enumerate(sorted_commands)}
