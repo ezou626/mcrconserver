@@ -9,21 +9,6 @@ for automatic resource management.
 Job failures or incompletes are the responsibility of the user to evaluate.
 We want shutdown to be graceful and controlled, but also happen within
 timing requirements (when the rest of the app exits, for example).
-
-**Example Usage:**
-
-.. code-block:: python
-    # can wrap a whole FastAPI app with lifespan context manager
-    async with RCONWorkerPool(config) as pool:
-        result = asyncio.get_event_loop().create_future()
-        command = RCONCommand(
-            "say Hello World",
-            user=user,
-            command_id=1,
-            result=result,
-        )
-        await pool.queue_command(command)
-        result = await command.get_command_result()
 """
 
 import asyncio
@@ -36,6 +21,7 @@ from .connection import SocketClient, SocketClientConfig
 from .rcon_exceptions import RCONClientIncorrectPasswordError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from types import TracebackType
 
 
@@ -153,27 +139,32 @@ async def _worker(
     while not state.worker_should_shutdown:
         try:
             command = await queue.get()
-            await asyncio.gather(
-                *(dep.completion.wait() for dep in command.dependencies),
-            )
+        except asyncio.QueueShutDown:
+            break
+
+        try:
+            if command.dependencies:
+                await asyncio.gather(
+                    *(dep.completion.wait() for dep in command.dependencies),
+                )
             response = await client.send_command(command.command)
             queue.task_done()
 
-            # Set result or error based on response
             if response is None:
                 command.set_command_error(ConnectionError("RCON authentication failed"))
             else:
                 command.set_command_result(response)
 
-        except (TimeoutError, ConnectionError):
+        except (TimeoutError, ConnectionError) as e:
             LOGGER.exception(
                 "Worker %d: Connection error, reconnecting...",
                 worker_id,
             )
+            queue.task_done()
+            if command.result is not None:
+                command.set_command_error(e)
             await client.reconnect()
             continue
-        except asyncio.QueueShutDown:
-            break
 
     await client.disconnect()
 
@@ -188,37 +179,12 @@ class RCONWorkerPool:
     This class provides a worker pool that can process RCON commands concurrently.
     It's designed to be used as a context manager for automatic resource management.
 
-    **Example Usage:**
-
     .. code-block:: python
-
-        # Basic usage with defaults
-        config = RCONWorkerPoolConfig(
-            password="serverpassword",
-            port=25575,
-            socket_timeout=None,
-            worker_count=1,
-            reconnect_pause=5
-        )
         async with RCONWorkerPool(config) as pool:
-            command = RCONCommand("list", user=None)
-            command.result = asyncio.get_event_loop().create_future()
+            future = asyncio.get_event_loop().create_future()
+            command = RCONCommand("list", user=None, result=future)
             await pool.queue_command(command)
             result = await command.get_command_result()
-
-        # Custom configuration
-        config = RCONWorkerPoolConfig(
-            password="serverpassword",
-            port=25575,
-            socket_timeout=30,
-            worker_count=3,
-            reconnect_pause=5,
-            grace_period=10,  # 10 seconds to finish work
-            queue_clear_period=5,  # 5 seconds to clear queue
-            await_shutdown_period=5  # 5 seconds for clean shutdown
-        )
-        async with RCONWorkerPool(config) as pool:
-            # Use the pool...
     """
 
     def __init__(
@@ -233,7 +199,7 @@ class RCONWorkerPool:
         self.state = RCONWorkerPoolState()
         self._queue: asyncio.Queue[RCONCommand] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
-        self.clients: list[SocketClient] = []  # Make this accessible for debugging
+        self._clients: list[SocketClient] = []
 
     async def __aenter__(self) -> Self:
         """Start the worker pool and wait for all workers to connect."""
@@ -282,7 +248,7 @@ class RCONWorkerPool:
         ]
 
         try:
-            self.clients = await asyncio.gather(*socket_clients)
+            self._clients = await asyncio.gather(*socket_clients)
         except RCONClientIncorrectPasswordError as e:
             msg = "One or more workers failed to authenticate"
             LOGGER.exception(msg)
@@ -300,11 +266,10 @@ class RCONWorkerPool:
 
         LOGGER.info("All RCON workers connected successfully")
 
-    async def _cancel_workers(self) -> None:
-        """Cancel all worker tasks and wait for them to finish."""
-        for worker in self._workers:
-            worker.cancel()
-        await asyncio.gather(*self._workers, return_exceptions=True)
+    @property
+    def clients(self) -> list[SocketClient]:
+        """Get the list of socket clients (for debugging/monitoring)."""
+        return self._clients
 
     async def shutdown(self) -> None:
         """Shutdown the worker pool gracefully.
@@ -350,10 +315,10 @@ class RCONWorkerPool:
                     self._queue.qsize(),
                 )
 
-        # force shutdown
+        # Force queue shutdown
         self._queue.shutdown(immediate=True)
 
-        # final cleanup - cancel workers if they haven't stopped
+        # Wait for workers to finish or timeout
         if self.config.await_shutdown_period != RCONWorkerPoolConfig.DISABLE:
             try:
                 await asyncio.wait_for(
@@ -371,21 +336,8 @@ class RCONWorkerPool:
     async def queue_command(self, command: RCONCommand) -> None:
         """Queue a single command for processing.
 
-        The command will be processed by one of the available workers.
-        If the command has a result Future, the caller can await
-        :meth:`command.get_command_result()` to get the response.
-
         :param command: The command to send to the Minecraft server
         :raises RuntimeError: If the worker pool is shutting down
-
-        **Example:**
-
-        .. code-block:: python
-
-            command = RCONCommand("say Hello", user=None)
-            command.result = asyncio.get_event_loop().create_future()
-            await pool.queue_command(command)
-            response = await command.get_command_result()
         """
         if self.state.pool_should_shutdown:
             msg = "Worker pool is shutting down"
@@ -396,32 +348,14 @@ class RCONWorkerPool:
 
     async def queue_job(
         self,
-        commands: list[RCONCommand],
+        commands: Iterable[RCONCommand],
     ) -> None:
-        """Queue multiple commands for processing.
-
-        The commands will be processed by the available workers.
-        If the commands have result Futures, the caller can await
-        :meth:`command.get_command_result()` to get the responses.
+        """Queue multiple commands for processing. Sorted to avoid deadlocks.
 
         :param commands: The list of commands to send to the Minecraft server
         :raises RuntimeError: If the worker pool is shutting down
         :raises ValueError: If a cycle is detected in command dependencies
             or duplicate IDs exist.
-
-        **Example:**
-
-        .. code-block:: python
-
-            commands = [
-                RCONCommand("say Hello", user=None),
-                RCONCommand("list", user=None),
-            ]
-            for command in commands:
-                command.result = asyncio.get_event_loop().create_future()
-            await pool.queue_job(commands)
-            for command in commands:
-                response = await command.get_command_result()
         """
         if self.state.pool_should_shutdown:
             msg = "Worker pool is shutting down"

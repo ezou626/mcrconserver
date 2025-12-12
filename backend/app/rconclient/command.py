@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, Field
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -29,6 +31,25 @@ class RCONPacketType(IntEnum):
     COMMAND_PACKET = 2
     AUTH_PACKET = 3
     DUMMY_PACKET = 200
+
+
+class RCONCommandSpecification(BaseModel):
+    """Pydantic model for specifying RCON command configuration.
+
+    This model allows clean specification of commands with dependencies
+    for job creation, integrating well with FastAPI and JSON serialization.
+    """
+
+    id: int = Field(..., description="Unique command identifier within the job")
+    cmd: str = Field(..., description="The RCON command string")
+    dependencies: list[int] = Field(
+        default_factory=list,
+        description="List of command IDs that must complete before this command",
+    )
+    require_result: bool = Field(
+        default=True,
+        description="Whether a Future for the result is needed",
+    )
 
 
 @dataclass(frozen=True)
@@ -138,56 +159,63 @@ class RCONCommand:
         return sorted_commands
 
     @classmethod
-    def create_job(
+    def create_command_from_specification(
         cls,
-        commands: list[str],
-        ids: list[int],
-        dependencies: list[tuple[int, int]],
+        specification: RCONCommandSpecification,
         user: User | None,
-        *,
-        require_results: bool = True,
-    ) -> list[RCONCommand]:
-        """Create a job with optional results.
+    ) -> RCONCommand:
+        """Create a command from a command specification.
 
-        :param commands: The list of command strings to be sent to the RCON server
-        :param ids: The list of command IDs corresponding to the commands
-        :param dependencies: A list of tuples representing command dependencies
-            (depender_id, dependee_id)
+        :param specification: The command specification
         :param user: The user who issued the command, if applicable
-        :param require_results: Whether a Future for the result is needed
-
-        :return: The created RCONCommand instances topologically sorted
-
-        :raises ValueError: If a cycle is detected in command
-            dependencies or duplicate IDs exist.
+        :return: The created RCONCommand
         """
-        if len(ids) != len(commands):
-            msg = "IDs list must be the same length as commands list"
-            raise ValueError(msg)
+        result = (
+            asyncio.get_event_loop().create_future()
+            if specification.require_result
+            else None
+        )
+        return RCONCommand(
+            command=specification.cmd,
+            user=user,
+            command_id=specification.id,
+            result=result,
+        )
 
+    @classmethod
+    def create_job_from_specification(
+        cls,
+        job_specification: Iterable[RCONCommandSpecification],
+        user: User | None,
+    ) -> Iterable[RCONCommand]:
+        """Create commands from a list of command specifications.
+
+        .. note:: Does not validate the job specification for cycles, duplicate IDs,
+        or order the commands. Use :meth:`topological_sort` to sort the commands
+        after creation.
+
+        :param job_specification: Defines commands and dependencies
+        :param user: The user who issued the command, if applicable
+
+        :return: The created RCONCommand instances
+        """
         rcon_commands: dict[int, RCONCommand] = {}
-        for command, command_id in zip(commands, ids, strict=True):
-            future = (
-                asyncio.get_event_loop().create_future() if require_results else None
-            )
-            rcon_command = RCONCommand(
-                command=command,
-                user=user,
-                command_id=command_id,
-                result=future,
-            )
-            rcon_commands[command_id] = rcon_command
 
-        # Add dependencies
-        for depender_id, dependee_id in dependencies:
-            depender = rcon_commands.get(depender_id)
-            dependee = rcon_commands.get(dependee_id)
+        for cmd_spec in job_specification:
+            rcon_command = RCONCommand.create_command_from_specification(cmd_spec, user)
+            rcon_commands[cmd_spec.id] = rcon_command
+
+        for cmd_spec in job_specification:
+            depender = rcon_commands.get(cmd_spec.id)
             if not depender:
-                msg = f"Depender command ID {depender_id} not found"
+                msg = f"Command ID {cmd_spec.id} not found"
                 raise ValueError(msg)
-            if not dependee:
-                msg = f"Dependee command ID {dependee_id} not found"
-                raise ValueError(msg)
-            depender.add_dependency(dependee)
 
-        return RCONCommand.topological_sort(rcon_commands.values())
+            for dependee_id in cmd_spec.dependencies:
+                dependee = rcon_commands.get(dependee_id)
+                if not dependee:
+                    msg = f"Dependency command ID {dependee_id} not found"
+                    raise ValueError(msg)
+                depender.add_dependency(dependee)
+
+        return rcon_commands.values()
