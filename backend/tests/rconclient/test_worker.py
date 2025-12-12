@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.common.user import Role, User
-from app.rconclient.command import RCONCommand
-from app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
-from app.rconclient.worker import (
+from backend.app.common.user import Role, User
+from backend.app.rconclient.command import RCONCommand
+from backend.app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
+from backend.app.rconclient.worker import (
     RCONWorkerPool,
     RCONWorkerPoolConfig,
     RCONWorkerPoolState,
@@ -189,7 +189,7 @@ class TestRCONWorkerPool:
         assert pool._workers == []  # noqa: SLF001
         assert pool.clients == []
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_pool_connect_success(
         self,
         mock_get_client: MagicMock,
@@ -209,7 +209,7 @@ class TestRCONWorkerPool:
 
         await pool.shutdown()
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_pool_connect_auth_failure(
         self,
         mock_get_client: MagicMock,
@@ -228,7 +228,7 @@ class TestRCONWorkerPool:
         ):
             await pool.connect()
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_pool_connect_connection_failure(
         self,
         mock_get_client: MagicMock,
@@ -252,7 +252,7 @@ class TestRCONWorkerPool:
         ):
             await pool.connect()
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_context_manager_usage(
         self,
         mock_get_client: MagicMock,
@@ -266,7 +266,7 @@ class TestRCONWorkerPool:
             assert len(pool.clients) == worker_config.worker_count
             assert len(pool._workers) == worker_config.worker_count  # noqa: SLF001
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_single_command(
         self,
         mock_get_client: MagicMock,
@@ -291,7 +291,7 @@ class TestRCONWorkerPool:
             result = await asyncio.wait_for(future, timeout=2.0)
             assert result == "test response"
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_command_during_shutdown(
         self,
         mock_get_client: MagicMock,
@@ -314,7 +314,7 @@ class TestRCONWorkerPool:
 
         await pool.shutdown()
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_job_with_dependencies(
         self,
         mock_get_client: MagicMock,
@@ -350,7 +350,7 @@ class TestRCONWorkerPool:
             )
             assert all(result == "test response" for result in results)
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_job_during_shutdown(
         self,
         mock_get_client: MagicMock,
@@ -373,7 +373,7 @@ class TestRCONWorkerPool:
 
         await pool.shutdown()
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_job_with_invalid_dependencies(
         self,
         mock_get_client: MagicMock,
@@ -398,7 +398,7 @@ class TestRCONWorkerPool:
             ):
                 await pool.queue_job(commands)
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_graceful_shutdown_phases(
         self,
         mock_get_client: MagicMock,
@@ -436,7 +436,7 @@ class TestRCONWorkerPool:
         ):
             await pool.shutdown()
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_handles_connection_error(
         self,
         mock_get_client: MagicMock,
@@ -464,7 +464,7 @@ class TestRCONWorkerPool:
 
             mock_client.send_command.assert_called_once_with("list")
 
-    @patch("app.rconclient.worker.SocketClient.get_new_client")
+    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_worker_processes_command_with_dependencies(
         self,
         mock_get_client: MagicMock,

@@ -1,6 +1,6 @@
 """Unit tests for the RCON client types module.
 
-This module contains tests for the :class:`~app.rconclient.types.RCONCommand`
+This module contains tests for the :class:`~backend.app.rconclient.types.RCONCommand`
 class, including dependency management and error handling.
 """
 
@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from app.common.user import Role, User
-from app.rconclient.command import RCONCommand
+from backend.app.common.user import Role, User
+from backend.app.rconclient.command import RCONCommand
 
 if TYPE_CHECKING:
     from collections.abc import Generator
