@@ -28,7 +28,6 @@ logger.setLevel(logging.INFO)
 
 
 async def pool_versus_single_worker_one_iteration(
-    config: BenchmarkConfig,
     rcon_config: RCONWorkerPoolConfig,
 ) -> tuple[float, float]:
     """Benchmark the performance of various worker pools versus a single worker."""
@@ -77,7 +76,7 @@ def worker_benchmark(
 
     for _ in range(10):
         single_worker_time, multi_worker_time = asyncio.run(
-            pool_versus_single_worker_one_iteration(config, rcon_config),
+            pool_versus_single_worker_one_iteration(rcon_config),
         )
         results.append((single_worker_time, multi_worker_time))
 

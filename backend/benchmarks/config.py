@@ -1,7 +1,6 @@
 """Config for benchmarking the Minecraft RCON server."""
 
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
