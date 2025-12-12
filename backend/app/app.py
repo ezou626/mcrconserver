@@ -18,13 +18,12 @@ from backend.app.auth import (
 )
 from backend.app.command_router import configure_command_router
 from backend.app.rconclient import RCONWorkerPool
-
-from .config import load_config_from_env
+from backend.config import load_config_from_env
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from .config import AppConfig
+    from config import AppConfig
 
 LOGGER = logging.getLogger(__name__)
 POOL = RCONWorkerPool()
