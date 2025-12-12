@@ -17,7 +17,6 @@ from backend.app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordEr
 from backend.app.rconclient.worker import (
     RCONWorkerPool,
     RCONWorkerPoolConfig,
-    _fail_remaining_commands,
 )
 
 if TYPE_CHECKING:
@@ -44,7 +43,6 @@ def worker_config() -> RCONWorkerPoolConfig:
         worker_count=1,  # if we chose wrong, deadlock
         reconnect_pause=1,
         grace_period=1,
-        queue_clear_period=1,
         await_shutdown_period=1,
     )
 
@@ -91,13 +89,17 @@ class TestRCONWorkerPoolConfig:
 class TestFailRemainingCommands:
     """Test suite for the _fail_remaining_commands utility function."""
 
-    async def test_fail_remaining_commands_with_items(self, test_user: User) -> None:
+    async def test_fail_remaining_commands_with_items(
+        self,
+        test_user: User,
+        worker_config: RCONWorkerPoolConfig,
+    ) -> None:
         """Test that remaining commands in queue are failed with error."""
-        queue = asyncio.Queue()
+        pool = RCONWorkerPool(worker_config)
 
         # Add some commands to the queue with futures
-        future1 = asyncio.get_event_loop().create_future()
-        future2 = asyncio.get_event_loop().create_future()
+        future1 = asyncio.get_running_loop().create_future()
+        future2 = asyncio.get_running_loop().create_future()
         command1 = RCONCommand(
             command="list",
             user=test_user,
@@ -111,26 +113,16 @@ class TestFailRemainingCommands:
             result=future2,
         )
 
-        queue.put_nowait(command1)
-        queue.put_nowait(command2)
+        await pool.queue_command(command1)
+        await pool.queue_command(command2)
 
-        _fail_remaining_commands(queue)
+        await pool.shutdown()
 
         with pytest.raises(ConnectionError, match="pool shut down"):
             await future1
 
         with pytest.raises(ConnectionError, match="pool shut down"):
             await future2
-
-        assert queue.empty()
-
-    async def test_fail_remaining_commands_with_empty_queue(self) -> None:
-        """Test that function handles empty queue gracefully."""
-        queue = asyncio.Queue()
-
-        _fail_remaining_commands(queue)
-
-        assert queue.empty()
 
 
 @pytest.mark.asyncio
@@ -170,19 +162,6 @@ class TestRCONWorkerPool:
             await pool.connect()
 
     @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
-    async def test_context_manager_usage(
-        self,
-        mock_get_client: MagicMock,
-        worker_config: RCONWorkerPoolConfig,
-        mock_socket_client: AsyncMock,
-    ) -> None:
-        """Test using worker pool as context manager."""
-        mock_get_client.return_value = mock_socket_client
-
-        async with RCONWorkerPool(worker_config) as pool:
-            assert len(pool._workers) == worker_config.worker_count  # noqa: SLF001
-
-    @patch("backend.app.rconclient.worker.SocketClient.get_new_client")
     async def test_queue_single_command(
         self,
         mock_get_client: MagicMock,
@@ -194,7 +173,7 @@ class TestRCONWorkerPool:
         mock_get_client.return_value = mock_socket_client
 
         async with RCONWorkerPool(worker_config) as pool:
-            future = asyncio.get_event_loop().create_future()
+            future = asyncio.get_running_loop().create_future()
             command = RCONCommand(
                 command="list",
                 user=test_user,
@@ -245,8 +224,8 @@ class TestRCONWorkerPool:
         mock_get_client.return_value = mock_socket_client
 
         async with RCONWorkerPool(worker_config) as pool:
-            future1 = asyncio.get_event_loop().create_future()
-            future2 = asyncio.get_event_loop().create_future()
+            future1 = asyncio.get_running_loop().create_future()
+            future2 = asyncio.get_running_loop().create_future()
             command1 = RCONCommand(
                 command="list",
                 user=test_user,

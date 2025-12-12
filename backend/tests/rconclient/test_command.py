@@ -33,7 +33,7 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, Any]:
 @pytest.mark.asyncio
 async def test_rcon_command_creation_with_result(test_user: User) -> None:
     """Test RCONCommand creation with result future."""
-    future = asyncio.get_event_loop().create_future()
+    future = asyncio.get_running_loop().create_future()
     command = RCONCommand(command="list", user=test_user, result=future)
     command.set_command_result("Player count: 5")
 
@@ -45,7 +45,7 @@ async def test_rcon_command_creation_with_result(test_user: User) -> None:
 @pytest.mark.asyncio
 async def test_set_command_error_with_future(test_user: User) -> None:
     """Test setting command error when future exists and is awaited."""
-    future = asyncio.get_event_loop().create_future()
+    future = asyncio.get_running_loop().create_future()
     command = RCONCommand(command="list", user=test_user, result=future)
     error = RuntimeError("THIS IS A TEST EXCEPTION")
 
@@ -58,9 +58,9 @@ async def test_set_command_error_with_future(test_user: User) -> None:
 @pytest.mark.asyncio
 async def test_add_dependency(test_user: User) -> None:
     """Test adding a dependency to an RCONCommand."""
-    future1 = asyncio.get_event_loop().create_future()
+    future1 = asyncio.get_running_loop().create_future()
     command1 = RCONCommand(command="list", user=test_user, result=future1)
-    future2 = asyncio.get_event_loop().create_future()
+    future2 = asyncio.get_running_loop().create_future()
     command2 = RCONCommand(command="say Hello", user=test_user, result=future2)
     command2.add_dependency(command1)
 
