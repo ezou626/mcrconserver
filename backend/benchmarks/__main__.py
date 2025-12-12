@@ -4,11 +4,9 @@ import argparse
 
 from backend.app.rconclient import RCONWorkerPoolConfig
 from backend.benchmarks.setup import setup_benchmark
-from backend.config import load_config_from_env
-
+from backend.config import configure_logging, load_config_from_env
 
 from .rconclient import worker_benchmark
-from backend.config import configure_logging
 
 
 def main() -> None:

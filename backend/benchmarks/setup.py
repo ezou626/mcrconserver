@@ -26,7 +26,6 @@ def setup_benchmark(config: BenchmarkConfig) -> Generator[None]:
         )
         raise FileNotFoundError(msg)
 
-    # cd to the directory containing the Minecraft server JAR file
     Path(config.minecraft_server_jar_path).parent.mkdir(parents=True, exist_ok=True)
     os.chdir(Path(config.minecraft_server_jar_path).parent)
 
@@ -34,12 +33,8 @@ def setup_benchmark(config: BenchmarkConfig) -> Generator[None]:
         ["java", "-jar", config.minecraft_server_jar_path, "nogui"],  # noqa: S607
     )
 
-    # Wait for the Minecraft server to start up and be ready for RCON connections
-    print("Waiting for Minecraft server to start...")
-    time.sleep(2)  # Give the server time to fully initialize
-    print("Proceeding with benchmarks...")
+    time.sleep(2)
 
     yield
 
-    print("Shutting down Minecraft server...")
     server.kill()

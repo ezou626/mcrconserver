@@ -37,16 +37,13 @@ async def pool_versus_single_worker_one_iteration(
     def command_factory() -> RCONCommand:
         return RCONCommand(command="status", user=None)
 
-    print("Creating single worker pool")
     rcon_config.worker_count = 1
     single_pool = RCONWorkerPool(rcon_config)
-    print("Connected to RCON server")
 
     commands = [command_factory() for _ in range(num_commands)]
     await asyncio.gather(
         *[single_pool.queue_command(command) for command in commands],
     )
-    print("done queueing commands")
     start_time = timeit.default_timer()
     await asyncio.gather(*[command.completion.wait() for command in commands])
     single_worker_time = timeit.default_timer() - start_time
@@ -79,7 +76,6 @@ def worker_benchmark(
     results = []
 
     for _ in range(10):
-        print("Running benchmark iteration...")
         single_worker_time, multi_worker_time = asyncio.run(
             pool_versus_single_worker_one_iteration(config, rcon_config),
         )
