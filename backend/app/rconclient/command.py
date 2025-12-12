@@ -190,7 +190,7 @@ class RCONCommand:
     ) -> Iterable[RCONCommand]:
         """Create commands from a list of command specifications.
 
-        .. note:: Does not validate the job specification for cycles, duplicate IDs,
+        .. note:: Does not validate the job specification for cycles,
         or order the commands. Use :meth:`topological_sort` to sort the commands
         after creation.
 
@@ -203,6 +203,9 @@ class RCONCommand:
 
         for cmd_spec in job_specification:
             rcon_command = RCONCommand.create_command_from_specification(cmd_spec, user)
+            if cmd_spec.id in rcon_commands:
+                msg = f"Duplicate command ID {cmd_spec.id} found"
+                raise ValueError(msg)
             rcon_commands[cmd_spec.id] = rcon_command
 
         for cmd_spec in job_specification:
