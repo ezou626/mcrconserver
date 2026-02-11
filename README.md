@@ -2,12 +2,12 @@
 
 ## TL;DR
 
-Allows for easy administration of a Minecraft server over network
+Allows for easy administration of a Minecraft server over network, allowing for integrations with Discord bots, for example
 
 ## Features
 
-- Web UI for seamless management for admins
-- API for integrations (Discord bot, for example)
+- Authenticated HTTP routes for sending RCON commands
+- Web UI for admins
 
 ## Implementation Details
 
