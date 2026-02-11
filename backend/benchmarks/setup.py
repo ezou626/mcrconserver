@@ -1,6 +1,8 @@
 """Setup script for benchmarking the Minecraft RCON server."""
 
+import logging
 import os
+import socket
 import subprocess
 import time
 from contextlib import contextmanager
@@ -12,11 +14,39 @@ if TYPE_CHECKING:
 
     from .config import BenchmarkConfig
 
+LOGGER = logging.getLogger(__name__)
+
+_SERVER_STARTUP_TIMEOUT = 60
+_POLL_INTERVAL = 1
+
+
+def _wait_for_rcon(port: int, timeout: int = _SERVER_STARTUP_TIMEOUT) -> None:
+    """Block until the RCON port accepts connections or timeout is reached.
+
+    :param port: The RCON port to check
+    :param timeout: Maximum seconds to wait
+    :raises TimeoutError: If the port is not reachable within the timeout
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(("localhost", port), timeout=1):
+                LOGGER.info("RCON port %d is accepting connections", port)
+                return
+        except OSError:
+            time.sleep(_POLL_INTERVAL)
+
+    msg = f"RCON port {port} did not become available within {timeout}s"
+    raise TimeoutError(msg)
+
 
 @contextmanager
 def setup_benchmark(config: BenchmarkConfig) -> Generator[None]:
-    """Run the Minecraft server."""
-    # Create a directory for storing benchmark results
+    """Start the Minecraft server, wait for RCON, yield, then kill the server."""
+    # Resolve results_directory to an absolute path before chdir moves us
+    # into the Minecraft server directory.
+    config.results_directory = str(Path(config.results_directory).resolve())
+
     if not Path(config.results_directory).exists():
         Path.mkdir(Path(config.results_directory), parents=True, exist_ok=True)
 
@@ -33,7 +63,11 @@ def setup_benchmark(config: BenchmarkConfig) -> Generator[None]:
         ["java", "-jar", config.minecraft_server_jar_path, "nogui"],  # noqa: S607
     )
 
-    time.sleep(2)
+    try:
+        _wait_for_rcon(config.rcon_port)
+    except TimeoutError:
+        server.kill()
+        raise
 
     yield
 

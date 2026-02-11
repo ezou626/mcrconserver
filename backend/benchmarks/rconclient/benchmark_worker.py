@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
-import pandas as pd
+import numpy as np
 
 from backend.rconclient import (
     RCONCommand,
@@ -26,45 +26,50 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+NUM_COMMANDS = 100
+NUM_SAMPLES = 10
+CONFIDENCE_Z = 1.96  # 95 % confidence
 
-async def pool_versus_single_worker_one_iteration(
-    rcon_config: RCONWorkerPoolConfig,
-) -> tuple[float, float]:
-    """Benchmark the performance of various worker pools versus a single worker."""
-    num_commands = 1000
 
-    def command_factory() -> RCONCommand:
-        return RCONCommand(command="status", user=None)
+def _make_config(
+    base: RCONWorkerPoolConfig,
+    worker_count: int,
+) -> RCONWorkerPoolConfig:
+    """Create a new RCONWorkerPoolConfig with a different worker count.
 
-    rcon_config.worker_count = 1
-    single_pool = RCONWorkerPool(rcon_config)
-
-    commands = [command_factory() for _ in range(num_commands)]
-    await asyncio.gather(
-        *[single_pool.queue_command(command) for command in commands],
+    :param base: The base configuration to copy settings from
+    :param worker_count: The desired number of workers
+    :return: A fresh config with the given worker count
+    """
+    return RCONWorkerPoolConfig(
+        password=base.password,
+        port=base.port,
+        socket_timeout=base.socket_timeout,
+        worker_count=worker_count,
+        reconnect_pause=base.reconnect_pause,
+        grace_period=base.grace_period,
+        await_shutdown_period=base.await_shutdown_period,
+        command_delay=base.command_delay,
     )
-    start_time = timeit.default_timer()
-    await asyncio.gather(*[command.completion.wait() for command in commands])
-    single_worker_time = timeit.default_timer() - start_time
 
-    # Properly shut down the single worker pool
-    await single_pool.shutdown()
 
-    rcon_config.worker_count = 4
-    multi_pool = RCONWorkerPool(rcon_config)
+async def _run_pool(config: RCONWorkerPoolConfig) -> float:
+    """Time the end-to-end execution of NUM_COMMANDS through a worker pool.
 
-    commands = [command_factory() for _ in range(num_commands)]
-    await asyncio.gather(
-        *[multi_pool.queue_command(command) for command in commands],
-    )
-    start_time = timeit.default_timer()
-    await asyncio.gather(*[command.completion.wait() for command in commands])
-    multi_worker_time = timeit.default_timer() - start_time
+    Measures from the moment commands are queued until every command's
+    completion event has been set, giving the true wall-clock throughput.
 
-    # Properly shut down the multi worker pool
-    await multi_pool.shutdown()
+    :param config: Worker pool configuration to benchmark
+    :return: Elapsed wall-clock seconds
+    """
+    commands = [RCONCommand(command="list", user=None) for _ in range(NUM_COMMANDS)]
 
-    return single_worker_time, multi_worker_time
+    async with RCONWorkerPool(config) as pool:
+        start = timeit.default_timer()
+        for cmd in commands:
+            await pool.queue_command(cmd)
+        await asyncio.gather(*(cmd.completion.wait() for cmd in commands))
+        return timeit.default_timer() - start
 
 
 def worker_benchmark(
@@ -72,22 +77,48 @@ def worker_benchmark(
     rcon_config: RCONWorkerPoolConfig,
 ) -> None:
     """Run the benchmark suite for the RCON worker pool and save the results."""
-    results = []
+    single_times: list[float] = []
+    multi_times: list[float] = []
 
-    for _ in range(10):
-        single_worker_time, multi_worker_time = asyncio.run(
-            pool_versus_single_worker_one_iteration(rcon_config),
-        )
-        results.append((single_worker_time, multi_worker_time))
+    single_cfg = _make_config(rcon_config, worker_count=1)
+    multi_cfg = _make_config(rcon_config, worker_count=5)
 
-    df = pd.DataFrame(results, columns=["single_worker_time", "multi_worker_time"])
+    for i in range(1, NUM_SAMPLES + 1):
+        st = asyncio.run(_run_pool(single_cfg))
+        mt = asyncio.run(_run_pool(multi_cfg))
+        single_times.append(st)
+        multi_times.append(mt)
+        print(f"[{i}/{NUM_SAMPLES}]  1 worker: {st:.4f}s   5 workers: {mt:.4f}s")
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(df["single_worker_time"], marker="o", label="Single Worker")
-    plt.plot(df["multi_worker_time"], marker="o", label="Multi Worker")
-    plt.xlabel("Worker Count")
-    plt.ylabel("Time (s)")
-    plt.title("RCON Worker Pool Performance")
-    plt.legend()
-    plt.grid(True)  # noqa: FBT003
-    plt.savefig(Path(config.results_directory) / "rcon_worker_pool_performance.png")
+    # ---------- statistics ----------
+    single_arr = np.array(single_times)
+    multi_arr = np.array(multi_times)
+
+    means = [single_arr.mean(), multi_arr.mean()]
+    ci = [
+        CONFIDENCE_Z * single_arr.std(ddof=1) / np.sqrt(NUM_SAMPLES),
+        CONFIDENCE_Z * multi_arr.std(ddof=1) / np.sqrt(NUM_SAMPLES),
+    ]
+
+    print(f"\n1 worker  — mean: {means[0]:.4f}s  ± {ci[0]:.4f}s (95% CI)")
+    print(f"5 workers — mean: {means[1]:.4f}s  ± {ci[1]:.4f}s (95% CI)")
+
+    # ---------- bar plot ----------
+    labels = ["1 Worker", "5 Workers"]
+    x = np.arange(len(labels))
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    colors = ["#4C72B0", "#DD8452"]
+    bars = ax.bar(x, means, yerr=ci, capsize=8, width=0.45, color=colors)
+
+    ax.set_ylabel("Time (s)")
+    ax.set_title(f"RCON Worker Pool — {NUM_COMMANDS} commands, {NUM_SAMPLES} samples")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.bar_label(bars, fmt="%.4f", padding=4)
+    ax.set_ylim(bottom=0)
+    ax.grid(axis="y", alpha=0.3)
+
+    fig.tight_layout()
+    out = Path(config.results_directory) / "rcon_worker_pool_performance.png"
+    fig.savefig(out, dpi=150)

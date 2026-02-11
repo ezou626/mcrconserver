@@ -23,14 +23,12 @@ class RCONPacketType(IntEnum):
     :cvar MULTI_PACKET: Used for multi-packet responses
     :cvar COMMAND_PACKET: Standard command packet
     :cvar AUTH_PACKET: Authentication packet
-    :cvar DUMMY_PACKET: Dummy packet used for multi-packet responses
     """
 
     ERROR_PACKET = -1
     MULTI_PACKET = 0
     COMMAND_PACKET = 2
     AUTH_PACKET = 3
-    DUMMY_PACKET = 200
 
 
 class RCONCommandSpecification(BaseModel):
@@ -87,20 +85,28 @@ class RCONCommand:
     def set_command_result(self, result: str) -> None:
         """Set the result on the associated Future if one is present.
 
+        Always signals completion, even for fire-and-forget commands
+        (where result is None), so that dependency chains and
+        external waiters on ``completion`` resolve correctly.
+
         :param result: The result of the command from the Minecraft server
         """
         if self.result is not None and not self.result.done():
             self.result.set_result(result)
-            self.completion.set()
+        self.completion.set()
 
     def set_command_error(self, error: Exception) -> None:
         """Set an error on the associated Future if one is present.
+
+        Always signals completion, even for fire-and-forget commands
+        (where result is None), so that dependency chains and
+        external waiters on ``completion`` resolve correctly.
 
         :param error: The exception that occurred while processing the command.
         """
         if self.result is not None and not self.result.done():
             self.result.set_exception(error)
-            self.completion.set()
+        self.completion.set()
 
     async def get_command_result(self) -> str | None:
         """Await and get the result from the associated Future if one is present.

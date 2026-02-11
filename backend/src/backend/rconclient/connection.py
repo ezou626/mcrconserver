@@ -100,24 +100,30 @@ class SocketClient:
         )
 
     @staticmethod
-    async def _read_response(reader: asyncio.StreamReader) -> tuple[int, str]:
+    async def _read_response(reader: asyncio.StreamReader) -> tuple[int, str, int]:
         """Read a valid and full command response from the RCON server.
 
         :param reader: The StreamReader for the RCON socket
-        :return: A tuple of (response_id, response_body)
+        :return: A tuple of (response_id, response_body, body_byte_length)
 
         :raises ConnectionError: if the socket is no longer connected
         """
-        # get the length
-        response_bytes = await reader.readexactly(4)
-        response_length: int = struct.unpack("<i", response_bytes)[0]
+        try:
+            # get the length
+            response_bytes = await reader.readexactly(4)
+            response_length: int = struct.unpack("<i", response_bytes)[0]
 
-        # rest of response
-        response_bytes = await reader.readexactly(response_length)
+            # rest of response
+            response_bytes = await reader.readexactly(response_length)
+        except asyncio.IncompleteReadError as e:
+            msg = "RCON connection closed unexpectedly"
+            raise ConnectionError(msg) from e
+
         response_id: int = struct.unpack("<i", response_bytes[0:4])[0]
-        response_body = response_bytes[8:-2].decode("utf-8")
+        body_bytes = response_bytes[8:-2]
+        response_body = body_bytes.decode("utf-8")
 
-        return response_id, response_body
+        return response_id, response_body, len(body_bytes)
 
     @staticmethod
     async def _send_auth(
@@ -144,7 +150,7 @@ class SocketClient:
         await asyncio.wait_for(writer.drain(), timeout=socket_timeout)
 
         # Read the single auth response
-        response_id, response_body = await asyncio.wait_for(
+        response_id, response_body, _ = await asyncio.wait_for(
             SocketClient._read_response(reader),
             timeout=socket_timeout,
         )
@@ -194,15 +200,33 @@ class SocketClient:
         msg = f"Failed to connect after {attempt} attempts"
         raise ConnectionError(msg) from last_exception
 
-    async def send_command(self, command: str) -> str | None:
-        """Send a command to the RCON server and returns the response.
+    # Minecraft's RCON implementation does not support pipelining: sending
+    # a second packet before reading the response to the first one causes
+    # the server to close the connection immediately.  This rules out
+    # sentinel-based multi-packet detection (Source RCON style).
+    #
+    # Instead we use a body-length heuristic with a short timeout fallback:
+    #   1. Read the first response packet (full socket timeout).
+    #   2. If the body is shorter than _MAX_BODY_SIZE, the response is
+    #      guaranteed to be complete — return immediately (zero delay).
+    #   3. If the body is exactly _MAX_BODY_SIZE, the server may have
+    #      split the response across packets.  Continue reading with a
+    #      short inter-packet timeout until no more data arrives.
+    _MAX_BODY_SIZE = 4096
+    _MULTI_PACKET_TIMEOUT = 0.1
 
-        Handles multi-packet responses by sending a dummy command with type 200
-        and collecting all packets until the "Unknown request c8" response.
+    async def send_command(self, command: str) -> str | None:
+        """Send a command to the RCON server and return the response.
+
+        Handles multi-packet responses by checking the body length of
+        each response packet.  If the body is shorter than the maximum
+        RCON payload size (4 096 bytes) the response is known to be
+        complete.  Otherwise, additional packets are read with a short
+        inter-packet timeout until no more data arrives.
 
         :param command: The RCON command to send
         :return: The response from the RCON server, or None if auth fails
-        :raises asyncio.TimeoutError: if the socket times out
+        :raises asyncio.TimeoutError: if the initial read times out
         :raises ConnectionError: if the socket is no longer connected
         """
         if self._request_id == -1:
@@ -212,7 +236,7 @@ class SocketClient:
         self._request_id += 1
         request_id = self._request_id
 
-        # Send the original command
+        # Send the command
         self._writer.write(
             SocketClient._format_packet(
                 command,
@@ -222,35 +246,38 @@ class SocketClient:
         )
         await asyncio.wait_for(self._writer.drain(), timeout=self._timeout)
 
-        # Send dummy packet to handle multi-packet responses
-        dummy_request_id = request_id + 1000
-        body_bytes = b""
-        dummy_packet = (
-            struct.pack("<i", len(body_bytes) + SocketClient._PACKET_METADATA_SIZE)
-            + struct.pack("<i", dummy_request_id)
-            + struct.pack("<i", RCONPacketType.DUMMY_PACKET)
-            + body_bytes
-            + b"\x00\x00"
+        # Read the first response with the full socket timeout
+        response_id, response_body, body_len = await asyncio.wait_for(
+            SocketClient._read_response(self._reader),
+            timeout=self._timeout,
         )
-        self._writer.write(dummy_packet)
-        await asyncio.wait_for(self._writer.drain(), timeout=self._timeout)
 
-        # Collect all response parts
-        response_parts = []
-        while True:
-            response_id, response_body = await asyncio.wait_for(
-                SocketClient._read_response(self._reader),
-                timeout=self._timeout,
-            )
+        if response_id == -1:
+            return None
 
-            if response_id == -1:
-                return None
+        response_parts = [response_body] if response_id == request_id else []
 
-            if response_id == dummy_request_id:
-                break
+        # If the body filled the maximum payload, more packets may follow.
+        # Keep reading with a short timeout until the stream goes quiet.
+        if body_len >= self._MAX_BODY_SIZE:
+            while True:
+                try:
+                    response_id, response_body, body_len = await asyncio.wait_for(
+                        SocketClient._read_response(self._reader),
+                        timeout=self._MULTI_PACKET_TIMEOUT,
+                    )
+                except (TimeoutError, ConnectionError):
+                    break
 
-            if response_id == request_id:
-                response_parts.append(response_body)
+                if response_id == -1:
+                    return None
+
+                if response_id == request_id:
+                    response_parts.append(response_body)
+
+                # Last fragment was under the max — no more packets
+                if body_len < self._MAX_BODY_SIZE:
+                    break
 
         return "".join(response_parts)
 

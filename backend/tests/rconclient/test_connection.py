@@ -127,16 +127,7 @@ class TestSocketClientCommandExecution:
         responses = create_response_data(
             [
                 ("", RCONPacketType.AUTH_PACKET, 0),
-                (
-                    "Player count: 5",
-                    RCONPacketType.COMMAND_PACKET,
-                    2,
-                ),  # Command response
-                (
-                    "Unknown request c8",
-                    RCONPacketType.COMMAND_PACKET,
-                    1002,
-                ),  # Dummy terminator
+                ("Player count: 5", RCONPacketType.COMMAND_PACKET, 2),
             ],
         )
 
@@ -156,17 +147,16 @@ class TestSocketClientCommandExecution:
         socket_config: SocketClientConfig,
     ) -> None:
         """Test that commands with multi-packet responses are properly concatenated."""
+        # First two packets have bodies at the max size (4096 bytes) to
+        # trigger multi-packet reading; the final packet is shorter,
+        # signalling end-of-response.
+        full_body = "A" * 4096
         responses = create_response_data(
             [
                 ("", RCONPacketType.AUTH_PACKET, 0),
-                ("Part 1: ", RCONPacketType.COMMAND_PACKET, 2),
-                ("Part 2: ", RCONPacketType.COMMAND_PACKET, 2),
-                ("Part 3", RCONPacketType.COMMAND_PACKET, 2),
-                (
-                    "Unknown request c8",
-                    RCONPacketType.COMMAND_PACKET,
-                    1002,
-                ),  # Dummy terminator
+                (full_body, RCONPacketType.COMMAND_PACKET, 2),
+                (full_body, RCONPacketType.COMMAND_PACKET, 2),
+                ("tail", RCONPacketType.COMMAND_PACKET, 2),
             ],
         )
 
@@ -179,7 +169,7 @@ class TestSocketClientCommandExecution:
 
             result = await client.send_command("help")
 
-            assert result == "Part 1: Part 2: Part 3"
+            assert result == full_body + full_body + "tail"
 
     async def test_send_command_handles_empty_response(
         self,
@@ -190,11 +180,6 @@ class TestSocketClientCommandExecution:
             [
                 ("", RCONPacketType.AUTH_PACKET, 0),
                 ("", RCONPacketType.COMMAND_PACKET, 2),
-                (
-                    "Unknown request c8",
-                    RCONPacketType.COMMAND_PACKET,
-                    1002,
-                ),  # Dummy terminator
             ],
         )
 

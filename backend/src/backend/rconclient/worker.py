@@ -49,6 +49,11 @@ class RCONWorkerPoolConfig:
     :param await_shutdown_period: Seconds to wait for workers to shut down gracefully.
         Set to DISABLE for immediate cancellation.
         Set to NO_TIMEOUT for indefinite wait.
+
+    :param command_delay: Minimum seconds between consecutive commands on a
+        single worker.  Prevents overwhelming the RCON server when commands
+        are queued faster than the server can handle them.
+        Set to DISABLE (0) to send commands as fast as possible.
     """
 
     NO_TIMEOUT: ClassVar[None] = None
@@ -64,6 +69,7 @@ class RCONWorkerPoolConfig:
     grace_period: int | None = field(default=DISABLE)
     await_shutdown_period: int | None = field(default=NO_TIMEOUT)
     retry_client_auth_attempts: int = field(default=INFINITE)
+    command_delay: float = field(default=DISABLE)
 
     def __post_init__(self) -> None:
         """Create a SocketClientConfig based on this worker pool configuration."""
@@ -104,6 +110,7 @@ async def _worker(
     client: SocketClient,
     queue: asyncio.Queue[RCONCommand],
     state: RCONWorkerPoolState,
+    command_delay: float = 0,
 ) -> None:
     """Process items from the RCON command queue.
 
@@ -114,6 +121,7 @@ async def _worker(
     :param client: RCON socket client for sending commands
     :param queue: Shared queue containing commands to process
     :param state: Runtime state object for checking shutdown signals
+    :param command_delay: Minimum seconds to wait between consecutive commands
     """
     LOGGER.info("Worker %d: Starting", worker_id)
 
@@ -146,6 +154,9 @@ async def _worker(
                 command.set_command_error(e)
             await client.reconnect()
             continue
+
+        if command_delay > 0:
+            await asyncio.sleep(command_delay)
 
     await client.disconnect()
 
@@ -239,7 +250,9 @@ class RCONWorkerPool:
             raise
 
         self._workers = [
-            asyncio.create_task(_worker(i, client, self._queue, self.state))
+            asyncio.create_task(
+                _worker(i, client, self._queue, self.state, self.config.command_delay),
+            )
             for i, client in enumerate(self._clients)
         ]
 
