@@ -21,7 +21,7 @@ from backend.rconclient import (
 )
 
 if TYPE_CHECKING:
-    from backend.benchmarks.config import BenchmarkConfig
+    from benchmarks.config import BenchmarkConfig
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -88,7 +88,6 @@ def worker_benchmark(
         mt = asyncio.run(_run_pool(multi_cfg))
         single_times.append(st)
         multi_times.append(mt)
-        print(f"[{i}/{NUM_SAMPLES}]  1 worker: {st:.4f}s   5 workers: {mt:.4f}s")
 
     # ---------- statistics ----------
     single_arr = np.array(single_times)
@@ -99,9 +98,6 @@ def worker_benchmark(
         CONFIDENCE_Z * single_arr.std(ddof=1) / np.sqrt(NUM_SAMPLES),
         CONFIDENCE_Z * multi_arr.std(ddof=1) / np.sqrt(NUM_SAMPLES),
     ]
-
-    print(f"\n1 worker  — mean: {means[0]:.4f}s  ± {ci[0]:.4f}s (95% CI)")
-    print(f"5 workers — mean: {means[1]:.4f}s  ± {ci[1]:.4f}s (95% CI)")
 
     # ---------- bar plot ----------
     labels = ["1 Worker", "5 Workers"]
