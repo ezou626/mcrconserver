@@ -32,10 +32,11 @@ jobs:
           mv dist "$HOME/${{ env.REPO_NAME }}/dist/static"
 
       # build backend
-      - name: Move app folder to zip
+      - name: Move backend sources to zip
         working-directory: ./backend
         run: |
-          mv app "$HOME/${{ env.REPO_NAME }}/dist/app"
+          mv src "$HOME/${{ env.REPO_NAME }}/dist/src"
+          mv main.py "$HOME/${{ env.REPO_NAME }}/dist"
           mv pyproject.toml "$HOME/${{ env.REPO_NAME }}/dist"
           mv .python-version "$HOME/${{ env.REPO_NAME }}/dist"
           mv uv.lock "$HOME/${{ env.REPO_NAME }}/dist"
