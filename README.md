@@ -39,6 +39,6 @@ The async RCON connection is heavily inspired by [this async RCON client](https:
 
 ### Architecture Diagram
 
-Crucially, note that for deploying this server, TLS is handled by a reverse proxy like Nginx or Apache.
+Crucially, note that for deploying this server, SSL/TLS is handled by `uvicorn`'s in-built cert support or a reverse proxy like Nginx, Apache.
 
 - TODO: Need to add this from Excalidraw
