@@ -12,9 +12,9 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.app.rconclient.command import RCONPacketType
-from backend.app.rconclient.connection import SocketClient, SocketClientConfig
-from backend.app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
+from backend.rconclient.command import RCONPacketType
+from backend.rconclient.connection import SocketClient, SocketClientConfig
+from backend.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
 
 
 class MockStreamReader(asyncio.StreamReader):

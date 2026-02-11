@@ -18,8 +18,8 @@ from backend.app.auth import (
     configure_key_router,
 )
 from backend.app.command_router import configure_command_router
-from backend.app.rconclient import RCONWorkerPool
-from backend.app.rconclient.worker import RCONWorkerPoolConfig
+from backend.rconclient import RCONWorkerPool
+from backend.rconclient.worker import RCONWorkerPoolConfig
 from backend.config import load_config_from_env
 
 if TYPE_CHECKING:

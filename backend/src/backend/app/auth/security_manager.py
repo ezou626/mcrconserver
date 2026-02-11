@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 
-from backend.app.common import Role, User
+from backend.common import Role, User
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)

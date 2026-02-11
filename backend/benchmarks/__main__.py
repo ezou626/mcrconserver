@@ -2,7 +2,7 @@
 
 import argparse
 
-from backend.app.rconclient import RCONWorkerPoolConfig
+from backend.rconclient import RCONWorkerPoolConfig
 from backend.config import configure_logging, get_env_str, load_config_from_env
 
 from .config import BenchmarkConfig

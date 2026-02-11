@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from backend.app.common import Role, UserBase
+from backend.common import Role, UserBase
 
 
 class UserResponse(UserBase, BaseModel):

@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.app.common import Role
+from backend.common import Role
 
 
 @pytest.fixture

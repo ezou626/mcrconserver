@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 
-from backend.app.common import Role, User
+from backend.common import Role, User
 
 from .models import APIKeyInfo, APIKeyTableDataResponse
 from .queries import KeyListOptions  # runtime and pydantic dependency

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from backend.app.rconclient import (
+from backend.rconclient import (
     RCONCommand,
     RCONWorkerPool,
     RCONWorkerPoolConfig,

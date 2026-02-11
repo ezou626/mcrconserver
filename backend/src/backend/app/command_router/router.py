@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.app.common import Role, User
-from backend.app.rconclient import RCONCommand, RCONCommandSpecification, RCONWorkerPool
+from backend.common import Role, User
+from backend.rconclient import RCONCommand, RCONCommandSpecification, RCONWorkerPool
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

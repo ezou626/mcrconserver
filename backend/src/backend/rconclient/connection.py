@@ -16,7 +16,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import ClassVar
 
-from backend.app.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
+from backend.rconclient.rcon_exceptions import RCONClientIncorrectPasswordError
 
 from .command import RCONPacketType
 
