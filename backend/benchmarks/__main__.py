@@ -3,10 +3,11 @@
 import argparse
 
 from backend.app.rconclient import RCONWorkerPoolConfig
-from backend.benchmarks.setup import setup_benchmark
-from backend.config import configure_logging, load_config_from_env
+from backend.config import configure_logging, get_env_str, load_config_from_env
 
+from .config import BenchmarkConfig
 from .rconclient import worker_benchmark
+from .setup import setup_benchmark
 
 
 def main() -> None:
@@ -19,6 +20,12 @@ def main() -> None:
         type=str,
         default=".env",
         help="Path to the environment configuration file.",
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=str,
+        default="./benchmark_results",
+        help="Directory to store benchmark results.",
     )
     args = parser.parse_args()
 
@@ -34,10 +41,17 @@ def main() -> None:
         await_shutdown_period=config.shutdown_await_period,
     )
 
+    benchmark_config = BenchmarkConfig(
+        minecraft_server_jar_path=get_env_str("MINECRAFT_SERVER_PATH", ""),
+        rcon_port=config.rcon_port,
+        rcon_password=config.rcon_password,
+        results_directory=args.results_dir,
+    )
+
     configure_logging(config)
 
-    with setup_benchmark(config.benchmark_config):
-        worker_benchmark(config.benchmark_config, worker_config)
+    with setup_benchmark(benchmark_config):
+        worker_benchmark(benchmark_config, worker_config)
 
 
 if __name__ == "__main__":

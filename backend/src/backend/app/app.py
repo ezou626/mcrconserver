@@ -25,7 +25,7 @@ from backend.config import load_config_from_env
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from config import AppConfig
+    from backend.config import AppConfig
 
 LOGGER = logging.getLogger(__name__)
 POOL = RCONWorkerPool()

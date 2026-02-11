@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 from jwt.algorithms import get_default_algorithms
 
-from backend.benchmarks import BenchmarkConfig
-
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
@@ -54,8 +52,6 @@ class AppConfig:
     :param shutdown_grace_period: Period for graceful shutdown in seconds
     :param shutdown_queue_clear_period: Period to clear the shutdown queue in seconds
     :param shutdown_await_period: Period for awaiting shutdown in seconds
-    :param worker_config: Configuration for RCON worker threads
-    :param security_manager: Configuration for JWT and API key management
     """
 
     database_path: str
@@ -76,17 +72,6 @@ class AppConfig:
 
     shutdown_grace_period: int | None
     shutdown_await_period: int | None
-
-    minecraft_server_path: str
-
-    def __post_init__(self) -> None:
-        """Initialize derived configuration attributes."""
-        self.benchmark_config = BenchmarkConfig(
-            minecraft_server_jar_path=self.minecraft_server_path,
-            rcon_port=self.rcon_port,
-            rcon_password=self.rcon_password,
-            results_directory="./",
-        )
 
 
 def configure_logging(app_config: AppConfig) -> None:
@@ -268,5 +253,4 @@ def load_config_from_env(env_file: str | Path | None) -> AppConfig:
             -1,
             lambda period: period >= -1,
         ),
-        minecraft_server_path=get_env_str("MINECRAFT_SERVER_PATH", ""),
     )

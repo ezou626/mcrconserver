@@ -4,7 +4,7 @@ import argparse
 
 import uvicorn
 
-from app import create_app
+from backend.app import create_app
 
 
 def main() -> None:
