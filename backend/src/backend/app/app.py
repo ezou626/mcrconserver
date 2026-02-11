@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -18,9 +19,9 @@ from backend.app.auth import (
     configure_key_router,
 )
 from backend.app.command_router import configure_command_router
+from backend.config import load_config_from_env
 from backend.rconclient import RCONWorkerPool
 from backend.rconclient.worker import RCONWorkerPoolConfig
-from backend.config import load_config_from_env
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -29,6 +30,33 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 POOL = RCONWorkerPool()
+
+
+def _db_needs_owner(database_path: str) -> bool:
+    """Check synchronously whether the database needs an owner account.
+
+    Returns True if the database file doesn't exist, the users table
+    doesn't exist, or the users table is empty.
+
+    :param database_path: Path to the SQLite database file
+    :return: True if owner initialization is needed
+    """
+    if not Path(database_path).exists():
+        return True
+
+    try:
+        with sqlite3.connect(database_path) as conn:
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master "
+                "WHERE type='table' AND name='users'",
+            )
+            if cursor.fetchone()[0] == 0:
+                return True
+
+            cursor = conn.execute("SELECT COUNT(*) FROM users")
+            return cursor.fetchone()[0] == 0
+    except sqlite3.Error:
+        return True
 
 
 def configure_fastapi_app(config: AppConfig) -> FastAPI:
@@ -48,6 +76,15 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
     )
 
     worker_pool = RCONWorkerPool(worker_config)
+
+    security_manager = SecurityManager(
+        secret_key=config.secret_key,
+        algorithm=config.algorithm,
+        expire_minutes=config.access_token_expire_minutes,
+        passphrase_min_length=config.passphrase_min_length,
+        api_key_length=config.api_key_length,
+    )
+
     if not Path(config.database_path).parent.exists():
         Path(config.database_path).parent.mkdir(parents=True, exist_ok=True)
         LOGGER.info(
@@ -55,8 +92,10 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
             Path(config.database_path).parent,
         )
 
-    if not Path(config.database_path).exists():
-        LOGGER.info("Database file does not exist at %s", config.database_path)
+    owner_credentials: tuple[str, str] | None = None
+    if _db_needs_owner(config.database_path):
+        LOGGER.info("Database has no owner account — starting first-time setup.")
+        owner_credentials = security_manager.initialize_owner_account()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[Any, Any]:
@@ -70,15 +109,8 @@ def configure_fastapi_app(config: AppConfig) -> FastAPI:
             aiosqlite_connect(config.database_path) as db_connection,
             worker_pool as pool,
         ):
-            security_manager = SecurityManager(
-                secret_key=config.secret_key,
-                algorithm=config.algorithm,
-                expire_minutes=config.access_token_expire_minutes,
-                passphrase_min_length=config.passphrase_min_length,
-                api_key_length=config.api_key_length,
-            )
-
             auth_queries = AuthQueries(db_connection, security_manager)
+            await auth_queries.initialize_tables(owner_credentials)
 
             validate = Validate(auth_queries)
 

@@ -134,11 +134,19 @@ class AuthQueries:
         """Close the database connection."""
         await self.connection.close()
 
-    async def initialize_tables(self) -> None:
+    async def initialize_tables(
+        self,
+        owner_credentials: tuple[str, str] | None = None,
+    ) -> None:
         """Create users and api_keys tables if they do not exist.
 
         Creates the necessary database tables for authentication and API key management.
         This method should be called during application startup.
+
+        :param owner_credentials: Optional (username, password) tuple for seeding the
+            owner account. If the database has no users and credentials are provided,
+            the owner account is created automatically. If no credentials are provided
+            and the database has no users, a warning is logged.
         """
         async with self.connection as db:
             try:
@@ -150,7 +158,15 @@ class AuthQueries:
                     await db.commit()
                     return
 
-                username, password = self.security_manager.initialize_owner_account()
+                if owner_credentials is None:
+                    LOGGER.warning(
+                        "No users found in database and no owner credentials "
+                        "provided. The server will start without an owner account.",
+                    )
+                    await db.commit()
+                    return
+
+                username, password = owner_credentials
                 salt = gensalt()
                 hashed_password = hashpw(password.encode(), salt)
                 await db.execute(
